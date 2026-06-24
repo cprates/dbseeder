@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres@sha256:0027bef26712baaee437a4ea48fdf3d2d2e2bc5f0d81615374408ca320f3c7e3 # 17.10
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./test_env/migrations:/docker-entrypoint-initdb.d/
+    ports:
+      - ${POSTGRES_PORT}:${POSTGRES_PORT}
