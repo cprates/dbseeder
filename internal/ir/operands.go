@@ -89,7 +89,7 @@ type OperandConstant struct {
 	value string
 }
 
-func Constant(val string) Operand {
+func NewOperandConstant(val string) Operand {
 	return OperandConstant{value: val}
 }
 
