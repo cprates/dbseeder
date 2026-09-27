@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pgplex/pgparser/nodes"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/cprates/dbseeder/internal/ir"
 )
+
+type tableGetter func(ctx context.Context, schema, name string) (TableMeta, error)
 
 type ColumnIdentifier struct {
 	Schema       string
@@ -22,7 +25,16 @@ var (
 	}
 )
 
-func Parse(query string) (ir.Expression, error) {
+func Parse(ctx context.Context, getTableF tableGetter, query string) (ir.Expression, error) {
+	return parse(ctx, false, getTableF, query)
+}
+
+// ParseTest must be used for tests only.
+func ParseTest(ctx context.Context, query string) (ir.Expression, error) {
+	return parse(ctx, true, nil, query)
+}
+
+func parse(ctx context.Context, test bool, getTableF tableGetter, query string) (ir.Expression, error) {
 	stmts, err := parser.Parse(query)
 	if err != nil {
 		return nil, fmt.Errorf("parsing query: %w", err)
@@ -31,48 +43,63 @@ func Parse(query string) (ir.Expression, error) {
 	if len(stmts.Items) != 1 {
 		return nil, fmt.Errorf("expects one statement, got %d", len(stmts.Items))
 	}
-	_, queryExpr := selectToBet(nodeToStmt[*nodes.SelectStmt](stmts.Items[0]))
+	qCtx := &queryContext{
+		ctx:        ctx,
+		test:       test,
+		getTableF:  getTableF,
+		scopeStack: queryScopeStack{},
+	}
+	_, queryExpr := selectToBet(qCtx, nodeToStmt[*nodes.SelectStmt](stmts.Items[0]))
+	if queryExpr == nil {
+		queryExpr = ir.OpNoOp{}
+	}
 
 	return queryExpr, nil
 }
 
-func selectToBet(selectStmt *nodes.SelectStmt) ([]ir.Operand, ir.Expression) {
-	fromBet := fromToBet(selectStmt.FromClause.Items)
-	whereBet := whereToBet(selectStmt.WhereClause)
-	projection := nodesToBetOperand(selectStmt.TargetList.Items)
+func selectToBet(qCtx *queryContext, selectStmt *nodes.SelectStmt) ([]ir.Operand, ir.Expression) {
+	fromBet := fromToBet(qCtx, selectStmt.FromClause.Items)
+	whereBet := whereToBet(qCtx, selectStmt.WhereClause)
+	projection := nodesToBetOperand(qCtx, selectStmt.TargetList.Items)
 
 	return projection, reduceAnd(fromBet, whereBet)
 }
 
-func fromToBet(list []nodes.Node) ir.Expression {
+func fromToBet(qCtx *queryContext, list []nodes.Node) ir.Expression {
 	if len(list) == 0 {
 		return nil
 	}
 
+	qCtx.newScope()
+
 	item := list[0]
 	switch node := item.(type) {
 	case *nodes.RangeVar:
-		// RangeVar is a table name or alias, e.g.: 'FROM users AS u'
-		// TODO: push table to context node
+		alias := ""
+		if node.Alias != nil {
+			alias = node.Alias.Aliasname
+		}
+		// RangeVar is a table name or alias, e.g.: 'FROM table1 AS t1'
+		qCtx.addToScope(node.Schemaname, node.Relname, alias)
 		return nil
 	case *nodes.JoinExpr:
 		return reduceAnd(
-			joinToBet(node),
-			fromToBet(list[1:]),
+			joinToBet(qCtx, node),
+			fromToBet(qCtx, list[1:]),
 		)
 	default:
 		panic(fmt.Sprintf("unsupported item in 'from' clause: %T", item))
 	}
 }
 
-func joinToBet(joinNode *nodes.JoinExpr) ir.Expression {
+func joinToBet(qCtx *queryContext, joinNode *nodes.JoinExpr) ir.Expression {
 	// the structure of the tree generated with the current parser isn't optimised to be traversed recursively imho,
 	// e.g. mixes operations with qualifiers, so I need to make this in multiple steps
-	lBet, err := joinArgToBet(joinNode.Larg)
+	lBet, err := joinArgToBet(qCtx, joinNode.Larg)
 	if err != nil {
 		panic(err)
 	}
-	rBet, err := joinArgToBet(joinNode.Rarg)
+	rBet, err := joinArgToBet(qCtx, joinNode.Rarg)
 	if err != nil {
 		panic(err)
 	}
@@ -83,77 +110,91 @@ func joinToBet(joinNode *nodes.JoinExpr) ir.Expression {
 		// join operator, e.g.: JOIN ON t1.c1 = t2.c1
 		return reduceAnd(
 			joinBet,
-			aExprToBet(qual),
+			aExprToBet(qCtx, qual),
 		)
 	case *nodes.BoolExpr:
 		// join with composite condition, e.g.: JOIN ON expr AND expr
 		return reduceAnd(
 			joinBet,
-			boolExprToBet(qual.Boolop, qual.Args.Items),
+			boolExprToBet(qCtx, qual.Boolop, qual.Args.Items),
 		)
 	default:
 		panic(fmt.Sprintf("unsupported item in 'join' clause: %T", joinNode.Quals))
 	}
 }
 
-func joinArgToBet(joinArg nodes.Node) (ir.Expression, error) {
+func joinArgToBet(qCtx *queryContext, joinArg nodes.Node) (ir.Expression, error) {
 	switch nd := joinArg.(type) {
 	case *nodes.JoinExpr:
-		return joinToBet(nd), nil
+		return joinToBet(qCtx, nd), nil
 	case *nodes.RangeVar:
-		// TODO: push table to context node
+		alias := ""
+		if nd.Alias != nil {
+			alias = nd.Alias.Aliasname
+		}
+		qCtx.addToScope(nd.Schemaname, nd.Relname, alias)
+
 		return nil, nil
 	default:
 		return nil, fmt.Errorf("unsupported type in 'join' arg: %T", joinArg)
 	}
 }
 
-func whereToBet(wNode nodes.Node) ir.Expression {
+func whereToBet(qCtx *queryContext, wNode nodes.Node) ir.Expression {
 	if wNode == nil {
 		return nil
 	}
 
 	switch nd := wNode.(type) {
 	case *nodes.BoolExpr:
-		return boolExprToBet(nd.Boolop, nd.Args.Items)
+		return boolExprToBet(qCtx, nd.Boolop, nd.Args.Items)
 	case *nodes.A_Expr:
 		switch nd.Kind {
 		case nodes.AEXPR_IN:
-			return inToBet(nd)
+			return inToBet(qCtx, nd)
 		default:
-			return aExprToBet(nd)
+			return aExprToBet(qCtx, nd)
 		}
+	case *nodes.ColumnRef:
+		if nd.Fields.Len() != 1 {
+			panic(fmt.Errorf("unexpected number of items for a ColumnRef: %d", nd.Fields.Len()))
+		}
+		// e.g.: condition on a boolean column - 'WHERE cb;'
+		return ir.Equal(nodeToBetOperand(qCtx, nd), ir.NewOperandConstant("true"))
 	case *nodes.SubLink:
 		// at the time of writing this there was no SubLinkType custom type
 		switch nd.SubLinkType {
 		case 0:
 			// EXISTS (SELECT ...)
-			return existsToBet(nd)
+			return existsToBet(qCtx, nd)
 		case 2:
 			// c1 IN (SELECT ...)
-			return inToBet(nd)
+			return inToBet(qCtx, nd)
 		default:
 			// TODO: find out what are the other types, at least '1'
 			panic(fmt.Errorf("unexpected subquery type: %d", nd.SubLinkType))
 		}
+	case *nodes.NullTest:
+		// IS [NOT] NULL assertion
+		return nullTestToBet(qCtx, nd.Nulltesttype, nd.Arg)
 	default:
 		panic(fmt.Errorf("unsupported type in 'where' clause: %T", wNode))
 	}
 }
 
-func existsToBet(subQuery *nodes.SubLink) ir.Expression {
+func existsToBet(qCtx *queryContext, subQuery *nodes.SubLink) ir.Expression {
 	subSelect := nodeToStmt[*nodes.SelectStmt](subQuery.Subselect)
-	_, subQueryExpr := selectToBet(subSelect)
+	_, subQueryExpr := selectToBet(qCtx, subSelect)
 
 	return subQueryExpr
 }
 
-func inToBet(node nodes.Node) ir.Expression {
+func inToBet(qCtx *queryContext, node nodes.Node) ir.Expression {
 	switch in := node.(type) {
 	case *nodes.SubLink:
-		leftOpers := testExprToOperands(in.Testexpr)
+		leftOpers := testExprToOperands(qCtx, in.Testexpr)
 		subSelect := nodeToStmt[*nodes.SelectStmt](in.Subselect)
-		projection, subSelectExpr := selectToBet(subSelect)
+		projection, subSelectExpr := selectToBet(qCtx, subSelect)
 
 		var argsExpr ir.Expression
 		// trusting the parser will throw an error if left and right operators here do not match
@@ -164,22 +205,22 @@ func inToBet(node nodes.Node) ir.Expression {
 		return reduceAnd(argsExpr, subSelectExpr)
 	case *nodes.A_Expr:
 		// handles queries like 'c1 IN (1, 2, 3)'
-		return aExprToBet(in)
+		return aExprToBet(qCtx, in)
 	default:
 		panic(fmt.Errorf("unexpected node type for in oper: %T", node))
 	}
 }
 
 // TODO: probably can be replaced by nodesToBetOperand. Tst it when all tests are in place
-func testExprToOperands(testExpr nodes.Node) []ir.Operand {
+func testExprToOperands(qCtx *queryContext, testExpr nodes.Node) []ir.Operand {
 	// nodes.SubLink.Testexpr varies it's type depending on whether it's a single value or a tuple, etc
 	switch args := testExpr.(type) {
 	case *nodes.RowExpr:
 		// tuple
-		return nodesToBetOperand(args.Args.Items)
+		return nodesToBetOperand(qCtx, args.Args.Items)
 	case *nodes.ColumnRef:
 		// single column
-		return []ir.Operand{nodeToBetOperand(args)}
+		return []ir.Operand{nodeToBetOperand(qCtx, args)}
 	default:
 		panic(fmt.Errorf("unexpected type of SubLink.Testexpr: %T", testExpr))
 	}
@@ -217,11 +258,11 @@ func reduceOr(l, r ir.Expression) ir.Expression {
 	return nil
 }
 
-func aExprToBet(expr *nodes.A_Expr) ir.Expression {
+func aExprToBet(qCtx *queryContext, expr *nodes.A_Expr) ir.Expression {
 	switch expr.Kind {
 	case nodes.AEXPR_OP:
-		l := nodeToBetOperand(expr.Lexpr)
-		r := nodeToBetOperand(expr.Rexpr)
+		l := nodeToBetOperand(qCtx, expr.Lexpr)
+		r := nodeToBetOperand(qCtx, expr.Rexpr)
 		op := expr.Name.Items[0].(*nodes.String)
 		switch op.Str {
 		case "=":
@@ -241,8 +282,8 @@ func aExprToBet(expr *nodes.A_Expr) ir.Expression {
 		}
 	case nodes.AEXPR_IN:
 		var inExpr ir.Expression
-		lOpers := nodesToBetOperand([]nodes.Node{expr.Lexpr})
-		rOpers := nodesToBetOperand([]nodes.Node{expr.Rexpr})
+		lOpers := nodesToBetOperand(qCtx, []nodes.Node{expr.Lexpr})
+		rOpers := nodesToBetOperand(qCtx, []nodes.Node{expr.Rexpr})
 		op := expr.Name.Items[0].(*nodes.String)
 		// counting on the parser to make sure the operands are balanced
 		for ri := 0; ri < len(rOpers); ri += len(lOpers) {
@@ -267,7 +308,7 @@ func aExprToBet(expr *nodes.A_Expr) ir.Expression {
 	}
 }
 
-func boolExprToBet(op nodes.BoolExprType, args []nodes.Node) ir.Expression {
+func boolExprToBet(qCtx *queryContext, op nodes.BoolExprType, args []nodes.Node) ir.Expression {
 	if len(args) == 0 {
 		return nil
 	}
@@ -276,29 +317,33 @@ func boolExprToBet(op nodes.BoolExprType, args []nodes.Node) ir.Expression {
 	case *nodes.A_Expr:
 		return boolOpToBet(
 			op,
-			aExprToBet(lArg),
-			boolExprToBet(op, args[1:]),
+			aExprToBet(qCtx, lArg),
+			boolExprToBet(qCtx, op, args[1:]),
 		)
 	case *nodes.BoolExpr:
 		return boolOpToBet(
 			op,
-			boolExprToBet(lArg.Boolop, lArg.Args.Items),
-			boolExprToBet(lArg.Boolop, args[1:]),
+			boolExprToBet(qCtx, lArg.Boolop, lArg.Args.Items),
+			boolExprToBet(qCtx, lArg.Boolop, args[1:]),
 		)
 	case *nodes.ColumnRef:
 		if lArg.Fields.Len() != 1 {
 			panic(fmt.Errorf("unexpected number of items for a ColumnRef: %d", lArg.Fields.Len()))
 		}
 		// e.g.: condition on a boolean column - 'WHERE cb;'
-		return ir.Equal(nodeToBetOperand(lArg), ir.Constant("true"))
+		return ir.Equal(nodeToBetOperand(qCtx, lArg), ir.NewOperandConstant("true"))
 	case *nodes.NullTest:
 		// IS [NOT] NULL assertion
-		return nullTestToBet(lArg.Nulltesttype, lArg.Arg)
+		return boolOpToBet(
+			op,
+			nullTestToBet(qCtx, lArg.Nulltesttype, lArg.Arg),
+			boolExprToBet(qCtx, op, args[1:]),
+		)
 	case *nodes.SubLink:
 		return boolOpToBet(
 			op,
-			whereToBet(lArg),
-			boolExprToBet(op, args[1:]),
+			whereToBet(qCtx, lArg),
+			boolExprToBet(qCtx, op, args[1:]),
 		)
 	default:
 		panic(fmt.Sprintf("unsupported bool arg: %T", args[0]))
@@ -318,33 +363,45 @@ func boolOpToBet(op nodes.BoolExprType, l, r ir.Expression) ir.Expression {
 	}
 }
 
-func nodesToBetOperand(nds []nodes.Node) []ir.Operand {
+func nodesToBetOperand(qCtx *queryContext, nds []nodes.Node) []ir.Operand {
 	opers := make([]ir.Operand, 0, len(nds))
 	for _, nd := range nds {
 		switch n := nd.(type) {
 		case *nodes.ResTarget:
 			// e.g.: when the caller is the extractor of a select projection
-			opers = append(opers, nodesToBetOperand([]nodes.Node{n.Val})...)
+			opers = append(opers, nodesToBetOperand(qCtx, []nodes.Node{n.Val})...)
 		case *nodes.RowExpr:
-			opers = append(opers, nodesToBetOperand(n.Args.Items)...)
+			opers = append(opers, nodesToBetOperand(qCtx, n.Args.Items)...)
 		case *nodes.List:
 			// e.g.: when the caller is the extractor of a select projection within parentheses
-			opers = append(opers, nodesToBetOperand(n.Items)...)
+			opers = append(opers, nodesToBetOperand(qCtx, n.Items)...)
 		default:
-			opers = append(opers, nodeToBetOperand(nd))
+			opers = append(opers, nodeToBetOperand(qCtx, nd))
 		}
 	}
 
 	return opers
 }
 
-func nodeToBetOperand(node nodes.Node) ir.Operand {
+func nodeToBetOperand(qCtx *queryContext, node nodes.Node) ir.Operand {
 	switch operand := node.(type) {
 	case *nodes.ColumnRef:
 		colID := columnIdentifierFromColumnRef(operand)
-		return ir.NewOperandColumn(colID.Schema, colID.TableOrAlias, colID.Name) // TODO: take from the scope
+		if colID.Name == AllColumnsIdentifier.Name {
+			return ir.NewOperandColumn("", "", colID.Name)
+		}
+		schema, tableName := qCtx.lookupColumn(colID.Schema, colID.TableOrAlias, colID.Name)
+		return ir.NewOperandColumn(schema, tableName, colID.Name)
 	case *nodes.A_Const:
-		return ir.Constant(nodes.NodeToString(operand.Val))
+		if operand.Isnull {
+			return ir.OperandNil{}
+		}
+		switch constVal := operand.Val.(type) {
+		case *nodes.String:
+			return ir.NewOperandConstant(constVal.Str)
+		default:
+			return ir.NewOperandConstant(nodes.NodeToString(operand.Val))
+		}
 	default:
 		panic(fmt.Sprintf("unsupported operand: %T", node))
 	}
@@ -390,12 +447,12 @@ func nodeToStmt[T any](node nodes.Node) T {
 	return stmt
 }
 
-func nullTestToBet(op nodes.NullTestType, arg nodes.Node) ir.Expression {
+func nullTestToBet(qCtx *queryContext, op nodes.NullTestType, arg nodes.Node) ir.Expression {
 	switch op {
 	case nodes.IS_NULL:
-		return ir.Equal(nodeToBetOperand(arg), ir.OperandNil{})
+		return ir.Equal(nodeToBetOperand(qCtx, arg), ir.OperandNil{})
 	case nodes.IS_NOT_NULL:
-		return ir.NotEqual(nodeToBetOperand(arg), ir.OperandNil{})
+		return ir.NotEqual(nodeToBetOperand(qCtx, arg), ir.OperandNil{})
 	default:
 		panic(fmt.Errorf("unknown null test operator: %d", op))
 	}
