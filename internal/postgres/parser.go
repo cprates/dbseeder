@@ -295,10 +295,9 @@ func aExprToBet(qCtx *queryContext, expr *nodes.A_Expr) ir.Expression {
 			for li, lOper := range lOpers {
 				// NOTE: this is a bit ugly as op.Str is constant throughout these iterations...
 				switch op.Str {
-				case "=":
+				// both built the same way, '<>' is negated at the end
+				case "=", "<>":
 					subExpr = reduceAnd(subExpr, ir.Equal(lOper, rOpers[ri+li]))
-				case "<>":
-					subExpr = reduceAnd(subExpr, ir.NotEqual(lOper, rOpers[ri+li]))
 				default:
 					panic(fmt.Sprintf("unsupported operator in 'AEXPR_IN': %s", op.Str))
 				}
@@ -306,6 +305,9 @@ func aExprToBet(qCtx *queryContext, expr *nodes.A_Expr) ir.Expression {
 			inExpr = reduceOr(inExpr, subExpr)
 		}
 
+		if op.Str == "<>" {
+			return ir.Not(inExpr)
+		}
 		return inExpr
 	default:
 		panic(fmt.Sprintf("unsupported expression kind: %d", expr.Kind))
