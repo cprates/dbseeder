@@ -70,7 +70,7 @@ func fromToBet(qCtx *queryContext, list []nodes.Node) ir.Expression {
 		return nil
 	}
 
-	qCtx.newScope()
+	qCtx.pushNewScope()
 
 	item := list[0]
 	switch node := item.(type) {
@@ -185,6 +185,7 @@ func whereToBet(qCtx *queryContext, wNode nodes.Node) ir.Expression {
 func existsToBet(qCtx *queryContext, subQuery *nodes.SubLink) ir.Expression {
 	subSelect := nodeToStmt[*nodes.SelectStmt](subQuery.Subselect)
 	_, subQueryExpr := selectToBet(qCtx, subSelect)
+	qCtx.popScope()
 
 	return subQueryExpr
 }
@@ -195,6 +196,9 @@ func inToBet(qCtx *queryContext, node nodes.Node) ir.Expression {
 		leftOpers := testExprToOperands(qCtx, in.Testexpr)
 		subSelect := nodeToStmt[*nodes.SelectStmt](in.Subselect)
 		projection, subSelectExpr := selectToBet(qCtx, subSelect)
+		defer func() {
+			qCtx.popScope()
+		}()
 
 		var argsExpr ir.Expression
 		// trusting the parser will throw an error if left and right operators here do not match

@@ -127,9 +127,18 @@ func (q *queryContext) addToScope(schema, tableName, tableAlias string) {
 	}
 }
 
-// newScope adds a new query scope to the context. It should be called on every 'SELECT' found in a query.
-func (q *queryContext) newScope() {
+// pushNewScope adds a new query scope to the context. It should be called on every 'SELECT' found in a query.
+func (q *queryContext) pushNewScope() {
 	q.scopeStack = append(q.scopeStack, map[string]TableMeta{})
+}
+
+// popScope removes the top of the stack is it has more than one scope.
+func (q *queryContext) popScope() {
+	if len(q.scopeStack) <= 1 {
+		return
+	}
+
+	q.scopeStack = q.scopeStack[0 : len(q.scopeStack)-1]
 }
 
 func (q *queryContext) lookupColumn(schema, tableOrAlias, columnName string) (string, string) {
