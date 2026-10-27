@@ -25,11 +25,7 @@ func anyToTime(a any) time.Time {
 
 	switch aT := a.(type) {
 	case string:
-		parsedA, err := time.Parse(time.RFC3339Nano, aT)
-		if err != nil {
-			panic(err)
-		}
-		return parsedA
+		return parseTime(aT)
 	case time.Time:
 		return aT
 	default:

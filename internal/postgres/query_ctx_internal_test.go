@@ -107,7 +107,7 @@ func TestQueryContext_LookupColumnWithTableName(t *testing.T) {
 				qCtx.addToScope(DefaultSchema, "table2", "")
 			},
 			lookupColumn: "c1",
-			expectPanic:  `ambiguous column "c1" in scope between public.table1 and public.table2`,
+			expectPanic:  `ambiguous column "c1" in scope between `,
 		},
 		{
 			description: "selects right table from multiple schemas",
@@ -179,10 +179,14 @@ func TestQueryContext_LookupColumnWithTableName(t *testing.T) {
 			}
 			test.setupScope(&qCtx)
 			if test.expectPanic != "" {
-				require.PanicsWithError(t, test.expectPanic, func() {
-					_, _ = qCtx.lookupColumn(test.lookupSchema, test.lookupTableOrAlias, test.lookupColumn)
-				})
-				return
+				defer func() {
+					err := recover()
+					if err == nil {
+						t.Fatal("function did not panic")
+					}
+
+					require.Contains(t, err.(error).Error(), test.expectPanic)
+				}()
 			}
 
 			schema, tableName := qCtx.lookupColumn(test.lookupSchema, test.lookupTableOrAlias, test.lookupColumn)

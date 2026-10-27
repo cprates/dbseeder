@@ -250,6 +250,13 @@ func columnsFromMetadata(cds []*postgres.ColumnMeta) []Column {
 }
 
 func columnFromMetadata(cd *postgres.ColumnMeta) Column {
+	var newDomain func() ValueDomain
+	if cd.SupportsDomain() {
+		newDomain = func() ValueDomain {
+			return cd.NewDomain()
+		}
+	}
+
 	return Column{
 		name:     cd.Name,
 		nullable: bool(cd.Nullable),
@@ -260,6 +267,7 @@ func columnFromMetadata(cd *postgres.ColumnMeta) Column {
 		wrapValue: func(val any) ColumnVal {
 			return cd.WrapValue(val)
 		},
+		newDomain: newDomain,
 	}
 }
 

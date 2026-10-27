@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -316,6 +318,12 @@ func (p typeDate) Cmp(l, r any) int {
 	return CmpTimes(l, r)
 }
 
+func (typeDate) newDomain(*ColumnMeta) Domain {
+	return newIntDomain(
+		dateConv{}, minTime.Unix()/secondsPerDay, maxTime.Unix()/secondsPerDay, time.Now().Unix()/secondsPerDay,
+	)
+}
+
 type typeUUID struct{}
 
 func (typeUUID) GenVal(col *ColumnMeta) *Value {
@@ -338,6 +346,10 @@ func (p typeTimestamp) Cmp(l, r any) int {
 	return CmpTimes(l, r)
 }
 
+func (typeTimestamp) newDomain(*ColumnMeta) Domain {
+	return newIntDomain(timestampConv{}, minTime.UnixMicro(), maxTime.UnixMicro(), time.Now().UnixMicro())
+}
+
 type typeTimestamptz struct{}
 
 func (typeTimestamptz) GenVal(col *ColumnMeta) *Value {
@@ -346,6 +358,10 @@ func (typeTimestamptz) GenVal(col *ColumnMeta) *Value {
 
 func (p typeTimestamptz) Cmp(l, r any) int {
 	return CmpTimes(l, r)
+}
+
+func (typeTimestamptz) newDomain(*ColumnMeta) Domain {
+	return newIntDomain(timestampConv{}, minTime.UnixMicro(), maxTime.UnixMicro(), time.Now().UnixMicro())
 }
 
 type typeInt2 struct{}
@@ -362,6 +378,10 @@ func (p typeInt2) Cmp(l, r any) int {
 	return CmpIntN(l, r, 16)
 }
 
+func (typeInt2) newDomain(*ColumnMeta) Domain {
+	return newIntDomain(intNConv{bits: 16}, math.MinInt16, math.MaxInt16, math.MaxInt16)
+}
+
 type typeInt4 struct{}
 
 func (typeInt4) GenVal(col *ColumnMeta) *Value {
@@ -374,6 +394,10 @@ func (p typeInt4) Cmp(l, r any) int {
 
 func (typeInt4) Encode(v any) ([]byte, error) {
 	return encodeRaw(pgtype.Int4OID, v)
+}
+
+func (typeInt4) newDomain(*ColumnMeta) Domain {
+	return newIntDomain(intNConv{bits: 32}, math.MinInt32, math.MaxInt32, math.MaxInt32)
 }
 
 type typeInt8 struct{}
@@ -390,6 +414,10 @@ func (p typeInt8) Cmp(l, r any) int {
 	return CmpIntN(l, r, 64)
 }
 
+func (typeInt8) newDomain(*ColumnMeta) Domain {
+	return newIntDomain(intNConv{bits: 64}, math.MinInt64, math.MaxInt64, math.MaxInt64)
+}
+
 type typeFloat4 struct{}
 
 func (typeFloat4) GenVal(col *ColumnMeta) *Value {
@@ -404,6 +432,10 @@ func (typeFloat4) Encode(v any) ([]byte, error) {
 	return encodeRaw(pgtype.Float4OID, v)
 }
 
+func (typeFloat4) newDomain(*ColumnMeta) Domain {
+	return &floatDomain{bits: 32, lo: -math.MaxFloat32, hi: math.MaxFloat32}
+}
+
 type typeFloat8 struct{}
 
 func (typeFloat8) GenVal(col *ColumnMeta) *Value {
@@ -416,6 +448,10 @@ func (typeFloat8) Encode(v any) ([]byte, error) {
 
 func (p typeFloat8) Cmp(l, r any) int {
 	return CmpFloat64(l, r)
+}
+
+func (typeFloat8) newDomain(*ColumnMeta) Domain {
+	return &floatDomain{bits: 64, lo: -math.MaxFloat64, hi: math.MaxFloat64}
 }
 
 type typeNumeric struct{}
@@ -435,6 +471,22 @@ func (typeNumeric) GenVal(col *ColumnMeta) *Value {
 
 func (typeNumeric) Encode(v any) ([]byte, error) {
 	return encodeRaw(pgtype.NumericOID, v)
+}
+
+func (typeNumeric) newDomain(col *ColumnMeta) Domain {
+	precision, scale := 10, 5
+	if col.NumericPrecision.Valid {
+		precision = int(col.NumericPrecision.Int32)
+	}
+	if col.NumericScale.Valid {
+		scale = int(col.NumericScale.Int32)
+	}
+	// values are represented by their unscaled integer which must fit in an int64, e.g.: 123.45 -> 12345
+	precision = min(precision, maxInt64Digits)
+	scale = min(max(scale, 0), maxInt64Digits)
+	limit := pow10[precision] - 1
+
+	return newIntDomain(numericConv{scale: scale}, -limit, limit, limit)
 }
 
 type typeJSON struct{}

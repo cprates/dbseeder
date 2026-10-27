@@ -44,6 +44,16 @@ type Column struct {
 	nullable    bool
 	generateVal func() ColumnVal
 	wrapValue   func(val any) ColumnVal
+	// nil when the type of the column does not support domains
+	newDomain func() ValueDomain
+}
+
+// ValueDomain is the set of values a column can take given comparisons against constants like 'c1 > 42'.
+type ValueDomain interface {
+	Above(constant string, inclusive bool)
+	Below(constant string, inclusive bool)
+	Exclude(constant string)
+	Gen() any
 }
 
 // Table is the storage agnostic representation of a table.

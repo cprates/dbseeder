@@ -161,6 +161,10 @@ func (o OpGT) Right() any {
 	return o.right
 }
 
+func (o OpGT) Negate() OpLE {
+	return OpLE(o)
+}
+
 type OpGE struct {
 	left  Operand
 	right Operand
@@ -182,6 +186,10 @@ func (o OpGE) Left() any {
 
 func (o OpGE) Right() any {
 	return o.right
+}
+
+func (o OpGE) Negate() OpLT {
+	return OpLT(o)
 }
 
 type OpLE struct {
@@ -207,6 +215,10 @@ func (o OpLE) Right() any {
 	return o.right
 }
 
+func (o OpLE) Negate() OpGT {
+	return OpGT(o)
+}
+
 type OpLT struct {
 	left  Operand
 	right Operand
@@ -228,6 +240,10 @@ func (o OpLT) Left() any {
 
 func (o OpLT) Right() any {
 	return o.right
+}
+
+func (o OpLT) Negate() OpGE {
+	return OpGE(o)
 }
 
 // OpIn handles IN (...)
