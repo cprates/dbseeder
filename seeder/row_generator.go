@@ -96,10 +96,11 @@ func (r *RowGenerator) procExpr(expr any) {
 	}
 }
 
+var procOrRnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func (r *RowGenerator) procOr(expr ir.OpOr) {
-	randGen := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// false for Left, true for Right
-	if randGen.Intn(2) == 0 {
+	if procOrRnd.Intn(2) == 0 {
 		r.procExpr(expr.Left())
 	} else {
 		r.procExpr(expr.Right())
@@ -317,9 +318,9 @@ func (r *RowGenerator) domainFor(col ir.OperandColumn) ValueDomain {
 	return step.domain
 }
 
-func (r *RowGenerator) procIn(expr ir.OpIn) {
-	randGen := rand.New(rand.NewSource(time.Now().UnixNano()))
+var procInRnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+func (r *RowGenerator) procIn(expr ir.OpIn) {
 	column := expr.Left().(ir.OperandColumn)
 	operands := expr.Right().([]ir.Operand)
 
@@ -328,7 +329,7 @@ func (r *RowGenerator) procIn(expr ir.OpIn) {
 		panic(fmt.Errorf("somehow we do not have columns for table %s", column.TableName()))
 	}
 
-	idx := randGen.Intn(len(operands))
+	idx := procInRnd.Intn(len(operands))
 	operand := operands[idx]
 
 	r.stepsConstants = append(r.stepsConstants, &StepEqualConstant{
@@ -375,12 +376,11 @@ func (r *RowGenerator) procNot(expr any) {
 	}
 }
 
-var procOrNotRnd = rand.NewSource(time.Now().UnixNano())
+var procOrNotRnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func (r *RowGenerator) procOrNot(expr ir.OpOr) {
-	randGen := rand.New(procOrNotRnd)
 	// false for Left, true for Right
-	if randGen.Intn(2) == 0 {
+	if procOrNotRnd.Intn(2) == 0 {
 		r.procNot(expr.Left())
 	} else {
 		r.procNot(expr.Right())
