@@ -13,6 +13,7 @@ type Operand interface {
 
 // OperandColumn is an operand that represents a column in a table.
 type OperandColumn struct {
+	// TODO: maybe add the Table meta here so that whenever this is needed, it does not have to do a lookup. It will be mostly used to get []Column
 	schema string
 	table  string
 	col    string

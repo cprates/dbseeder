@@ -1,0 +1,51 @@
+version: "2"
+run:
+  concurrency: 4
+  modules-download-mode: readonly
+  tests: false
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    gocyclo:
+      min-complexity: 20
+    govet:
+      enable:
+        - shadow
+    nakedret:
+      max-func-lines: 60
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+    unparam:
+      check-exported: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+    paths:
+      - test_env$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - test_env$

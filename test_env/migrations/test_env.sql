@@ -1,15 +1,20 @@
 CREATE TABLE fks_table_child1 (
 	id integer PRIMARY KEY,
-	c1c text
+	c1 text
+);
+CREATE TABLE fks_table_child20 (
+	id integer PRIMARY KEY,
+	c1 integer
 );
 CREATE TABLE fks_table_child2 (
 	id integer PRIMARY KEY,
-	c1c text
+	c1 integer REFERENCES fks_table_child20
 );
 CREATE TABLE fks_table (
 	id integer PRIMARY KEY,
 	c1 integer REFERENCES fks_table_child1,
-	c2 integer REFERENCES fks_table_child2
+	c2 integer REFERENCES fks_table_child2,
+	c3 text
 );
 
 CREATE TABLE unique_indexes_table (
@@ -25,4 +30,4 @@ CREATE TABLE unique_indexes_table (
 );
 CREATE UNIQUE INDEX unique_indexes_table_idx1 ON unique_indexes_table (id);
 CREATE UNIQUE INDEX unique_indexes_table_idx2 ON unique_indexes_table (id, c1);
-CREATE UNIQUE INDEX unique_indexes_table_idx3 ON unique_indexes_table (deleted_at) WHERE (deleted_at != NULL AND c1 = c4);
+CREATE UNIQUE INDEX unique_indexes_table_idx3 ON unique_indexes_table (deleted_at) WHERE (deleted_at IS NOT NULL AND c1 = c4);

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"database/sql"
+	"fmt"
 )
 
 type TableName struct {
@@ -272,4 +273,22 @@ func (c *ColumnMeta) GenerateVal() *Value {
 
 func (c *ColumnMeta) WrapValue(val any) *Value {
 	return &Value{value: val, _type: c.TypeDef}
+}
+
+// SupportsDomain returns true if the type of the column supports domains, false otherwise.
+func (c *ColumnMeta) SupportsDomain() bool {
+	_, ok := c.TypeDef.SubType.(domainType)
+
+	return ok
+}
+
+// NewDomain returns a new domain spanning every value of the column's type. Panics if the type of the column does
+// not support domains, see SupportsDomain.
+func (c *ColumnMeta) NewDomain() Domain {
+	sub, ok := c.TypeDef.SubType.(domainType)
+	if !ok {
+		panic(fmt.Errorf("column %s of type %s does not support domains", c.Name, c.TypeName))
+	}
+
+	return sub.newDomain(c)
 }

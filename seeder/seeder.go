@@ -26,9 +26,9 @@ type Seeder struct {
 }
 
 func New(cfg Config, db Database) *Seeder {
-	var lgr logger.Logger = logger.NullLogger{}
+	var lgr logger.Logger = logger.NewNullLogger()
 	if cfg.LogLevel > 0 {
-		lgr = logger.TextLogger{}
+		lgr = logger.NewTextLogger()
 	}
 	return &Seeder{
 		logger: lgr,
@@ -200,7 +200,7 @@ func (s *Seeder) populateConstrainedColumns(table *Table, seedExpr ir.Expression
 		return rowSet, nil
 	}
 
-	generator := NewRowGenerator(seedExpr, table.columnsGetter)
+	generator := NewRowGenerator(s.logger, seedExpr, table.columnsGetter)
 	return generator.Gen(), nil
 }
 
