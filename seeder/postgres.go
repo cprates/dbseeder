@@ -198,8 +198,6 @@ func (p *Postgres) tableMetaToTable(ctx context.Context, meta postgres.TableMeta
 		}
 	}
 
-	table.constraints = append(table.constraints, NewConNotNull(nullableColumns(columns)))
-
 	for _, con := range meta.UniqueIndexes() {
 		cols := make([]Column, len(con.ConCols))
 		for i, cd := range con.ConCols {
@@ -208,21 +206,23 @@ func (p *Postgres) tableMetaToTable(ctx context.Context, meta postgres.TableMeta
 		if con.PK {
 			table.constraints = append(
 				table.constraints,
-				NewConPK(con.Name, columnsFromMetadata(con.ConCols), schema, name),
+				newConPK(con.Name, columnsFromMetadata(con.ConCols), schema, name),
 			)
-		} else {
-			var cond ir.Expression
-			if con.Partial {
-				cond, err = p.buildPartialIndexCond(ctx, name, con.Definition)
-				if err != nil {
-					return Table{}, fmt.Errorf("building expression for partial index %s: %w", con.Name, err)
-				}
-			}
-			table.constraints = append(
-				table.constraints,
-				NewConUniqueIdx(con.Name, columnsFromMetadata(con.ConCols), schema, name, cond),
-			)
+			continue
 		}
+
+		// unique index other than PK
+		var cond ir.Expression
+		if con.Partial {
+			cond, err = p.buildPartialIndexCond(ctx, name, con.Definition)
+			if err != nil {
+				return Table{}, fmt.Errorf("building expression for partial index %s: %w", con.Name, err)
+			}
+		}
+		table.constraints = append(
+			table.constraints,
+			newConUniqueIdx(con.Name, columnsFromMetadata(con.ConCols), schema, name, cond),
+		)
 	}
 
 	for _, con := range meta.CheckConstraints() {
@@ -286,19 +286,6 @@ func (p *Postgres) getTableColumnsAdapter(ctx context.Context) func(schema, name
 
 		return columns
 	}
-}
-
-func nullableColumns(columns []Column) []Column {
-	nullable := make([]Column, 0)
-	for _, col := range columns {
-		if col.nullable {
-			continue
-		}
-
-		nullable = append(nullable, col)
-	}
-
-	return nullable
 }
 
 func (p *Postgres) buildPartialIndexCond(ctx context.Context, tableName, definition string) (ir.Expression, error) {
