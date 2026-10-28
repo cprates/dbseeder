@@ -118,10 +118,6 @@ func (v Value) Val() any {
 	return v.value
 }
 
-func (v *Value) SetVal(val any) {
-	v.value = val
-}
-
 func (v Value) Cmp(l, r any) int {
 	return v._type.Cmp(l, r)
 }
