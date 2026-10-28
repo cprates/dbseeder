@@ -195,9 +195,8 @@ func (s *Seeder) buildSeedExprForDependency(
 }
 
 func (s *Seeder) populateConstrainedColumns(table *Table, seedExpr ir.Expression) (RowSet, error) {
-	rowSet := RowSet{}
 	if seedExpr == nil {
-		return rowSet, nil
+		return RowSet{table.FQName(): Row{}}, nil
 	}
 
 	generator := NewRowGenerator(s.logger, seedExpr, table.columnsGetter)
