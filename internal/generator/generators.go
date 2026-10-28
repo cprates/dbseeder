@@ -1,8 +1,7 @@
 package generator
 
-// This file is a collection of value generators for different golang types.
-
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -16,21 +15,46 @@ var (
 	strDigits = []rune("0123456789")
 )
 
+// this is not a linear string generator, not all strings have the same probability. Smaller the string higher the
+// probability of being generated.
 func genVarString(min, max int, dict []rune) string {
 	if min > max {
 		panic(fmt.Errorf("min. %d must not be larger than max. %d", min, max))
 	}
-
-	size := min + rand.Intn(max-min+1)
-	b := make([]rune, size)
-	for i := range b {
-		b[i] = dict[rand.Intn(len(dict))]
+	if len(dict) == 0 {
+		panic(errors.New("dict cannot be empty"))
 	}
-	return string(b)
+
+	maxLen := max - min + 1
+	size := min + rand.Intn(maxLen)
+	// hack to create a lower probability for strings of size <= 3 in order to reduce collisions which hit hard
+	// generated rows throughput when unique indexes are involved. Moving forward random strings may be replaced
+	// with something more useful so not going to spend more time here for now.
+	if maxLen > 3 {
+		for i := 0; size <= 3 && i < 3; i++ {
+			size = min + rand.Intn(maxLen)
+		}
+	}
+	// this is a hack to make the empty string to have the same probability as any other character in a single
+	// character string
+	if size == 0 {
+		v := string(dict[rand.Intn(len(dict))])
+		if v == "0" {
+			return ""
+		}
+
+		return v
+	}
+
+	src := make([]rune, size)
+	for i := range src {
+		src[i] = dict[rand.Intn(len(dict))]
+	}
+
+	return string(src)
 }
 
 func GenBool() bool {
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return rand.Intn(2) == 0
 }
 

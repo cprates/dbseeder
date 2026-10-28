@@ -55,12 +55,10 @@ type ColumnMeta struct {
 	// numeric_precision_radix. For all other data types, this column is null.
 	NumericScale sql.NullInt32 `db:"numeric_scale"`
 	// Set when processing primary keys. Nil if the table has no PK
-	// TODO: Not in use at the moment, maybe remove if it turns out to not be useful
 	PKConstraint *ConstraintMeta
 	// Set when processing TABLE unique indexes. This column and table defined unique constraints as well as
 	// explicitly created as well as unique indexes to support PKs.
 	// A column is unique (simple or composed constraint) if this list is not empty.
-	// TODO: Not in use at the moment, maybe remove if it turns out to not be useful
 	UniqueIndexes []UniqueIndexMeta
 	// 'CHECK' constraints on this column if any
 	// TODO: Not in use that the moment, maybe remove if it turns out to not be useful
@@ -264,8 +262,11 @@ func (t *TableMeta) setCheckConstraints(cons []*ConstraintMeta) error {
 }
 
 func (c *ColumnMeta) GenerateVal() *Value {
-	if v, ok := nullOrDefVal(c); ok {
-		return v
+	// to avoid collisions do not use default nor NULL for columns part of unique indexes
+	if c.PKConstraint == nil && len(c.UniqueIndexes) == 0 {
+		if v, ok := nullOrDefVal(c); ok {
+			return v
+		}
 	}
 
 	return c.TypeDef.SubType.GenVal(c)
