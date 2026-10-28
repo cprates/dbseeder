@@ -6,7 +6,6 @@ import (
 
 type ColumnVal interface {
 	Val() any
-	SetVal(any)
 	Cmp(l, r any) int
 }
 
@@ -63,9 +62,9 @@ type Table struct {
 	name    string
 	columns []Column
 	fks     []*ForeignKey
-	// expression that represents the constraints of the schema: check constraints, unique indexes, foreign keys, etc
+	// expression that represents some constraints of the schema: check constraints, foreign keys and SQLFilter
 	expr ir.Expression
-	// List of **stateful** constraints to be used while seeding the table
+	// List of **stateful** constraints to be used while seeding the table - unique indexes
 	constraints []Constraint
 	// Generated data to seed the table
 	rows          []Row

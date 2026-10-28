@@ -202,8 +202,6 @@ func TestValue(t *testing.T) {
 	str, err := v.MarshalJSON()
 	require.NoError(t, err)
 	require.Equal(t, `"abc"`, string(str))
-	v.SetVal("42")
-	require.Equal(t, "42", v.Val())
 }
 
 func TestTypeFixedLenChar_GenVal(t *testing.T) {
