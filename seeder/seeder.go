@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cprates/dbseeder/config"
 	"github.com/cprates/dbseeder/internal/ir"
 	"github.com/cprates/dbseeder/internal/logger"
 )
@@ -21,11 +22,11 @@ type Database interface {
 type Seeder struct {
 	logger logger.Logger
 	tables []*Table
-	cfg    Config
+	cfg    config.Seeder
 	db     Database
 }
 
-func New(cfg Config, db Database) *Seeder {
+func New(cfg config.Seeder, db Database) *Seeder {
 	var lgr logger.Logger = logger.NewNullLogger()
 	if cfg.LogLevel > 0 {
 		lgr = logger.NewTextLogger()
@@ -68,7 +69,7 @@ func (s *Seeder) Seed(ctx context.Context) error {
 	return s.db.ExecScript(ctx, sqlScript)
 }
 
-func (s *Seeder) seedTable(ctx context.Context, tableCfg *TableConfig) error {
+func (s *Seeder) seedTable(ctx context.Context, tableCfg *config.Table) error {
 	fqName := tableCfg.Name
 	table, err := s.getTable(ctx, fqName)
 	if err != nil {

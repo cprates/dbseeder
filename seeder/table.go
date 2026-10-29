@@ -1,6 +1,7 @@
 package seeder
 
 import (
+	"github.com/cprates/dbseeder/config"
 	"github.com/cprates/dbseeder/internal/ir"
 )
 
@@ -57,7 +58,7 @@ type ValueDomain interface {
 
 // Table is the storage agnostic representation of a table.
 type Table struct {
-	cfg     *TableConfig
+	cfg     *config.Table
 	schema  string
 	name    string
 	columns []Column
