@@ -1,0 +1,25 @@
+{
+    "LogLevel":   1,
+    "Schema":     "public",
+    "MaxRows":    100000,
+    "MaxRetries": 3,
+    "Tables": [
+        {
+            "Name": "public.unique_indexes_table",
+            "SQLFilter": "select * from unique_indexes_table WHERE id > 0 AND id < 10000;"
+        },
+        {
+            "Name": "public.fks_table_child1"
+        },
+        {
+            "Name": "public.fks_table_child2"
+        },
+        {
+            "Name": "public.fks_table_child20"
+        },
+        {
+            "Name": "public.fks_table"
+        }
+    ],
+    "DryRun": false
+}
