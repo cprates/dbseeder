@@ -1,7 +1,7 @@
 {
-    "LogLevel":   1,
+    "LogLevel":   0,
     "Schema":     "public",
-    "MaxRows":    100000,
+    "MaxRows":    10000,
     "MaxRetries": 3,
     "Tables": [
         {
