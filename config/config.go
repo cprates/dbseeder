@@ -1,12 +1,14 @@
-package seeder
+package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 )
 
-type TableConfig struct {
+type Table struct {
 	// Name is the fully qualified name of the table, e.g.: public.table0
 	Name string
 	// MaxRows overrides general MaxRows
@@ -20,7 +22,7 @@ type TableConfig struct {
 	SQLFilter string
 }
 
-type Config struct {
+type Seeder struct {
 	// LogLevel
 	// 0: disabled
 	// 1: enabled
@@ -36,7 +38,7 @@ type Config struct {
 	// Defaults to 3
 	MaxRetries int
 	// Tables is the list of all tables to be seeded
-	Tables []*TableConfig
+	Tables []*Table
 	// OutputPath is the path where to store the SQL script with the generated data. Set to 'stdout' to print to
 	// stdout.
 	// Defaults to seed.sql
@@ -46,7 +48,7 @@ type Config struct {
 }
 
 var (
-	defaultConfig = Config{
+	defaultConfig = Seeder{
 		Schema:     "public",
 		MaxRows:    100,
 		MaxRetries: 3,
@@ -54,7 +56,21 @@ var (
 	}
 )
 
-func (t *TableConfig) Validate(c *Config) error {
+func Load(path string) (*Seeder, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read config file at %s: %w", path, err)
+	}
+
+	cfg := &Seeder{}
+	if err := json.Unmarshal(b, cfg); err != nil {
+		return nil, fmt.Errorf("unable to parse config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+func (t *Table) Validate(c *Seeder) error {
 	if parts := strings.Split(t.Name, "."); len(parts) != 2 {
 		return fmt.Errorf("table name %s is missing schema", t.Name)
 	}
@@ -76,12 +92,12 @@ func (t *TableConfig) Validate(c *Config) error {
 	return nil
 }
 
-func (t *TableConfig) SimpleName() string {
+func (t *Table) SimpleName() string {
 	parts := strings.Split(t.Name, ".")
 	return parts[1]
 }
 
-func (c *Config) GetTableCfg(fqName string) *TableConfig {
+func (c *Seeder) GetTableCfg(fqName string) *Table {
 	for _, cfg := range c.Tables {
 		if cfg.Name != fqName {
 			continue
@@ -94,7 +110,7 @@ func (c *Config) GetTableCfg(fqName string) *TableConfig {
 }
 
 // Validate validates config and sets default values.
-func (c *Config) Validate() error {
+func (c *Seeder) Validate() error {
 	if c.Schema == "" {
 		c.Schema = defaultConfig.Schema
 	}
