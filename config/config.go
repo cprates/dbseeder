@@ -67,6 +67,11 @@ func Load(path string) (*Seeder, error) {
 		return nil, fmt.Errorf("unable to parse config: %w", err)
 	}
 
+	err = cfg.Validate()
+	if err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 

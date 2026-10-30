@@ -1,4 +1,4 @@
-package seeder
+package config
 
 import (
 	"testing"
@@ -11,32 +11,32 @@ func TestConfig(t *testing.T) {
 
 	testsSet := []struct {
 		description string
-		input       Config
-		expectCfg   Config
+		input       Seeder
+		expectCfg   Seeder
 		expectErr   string
 	}{
 		{
 			description: "no configured tables error",
-			input:       Config{},
+			input:       Seeder{},
 			expectErr:   "no tables configured",
 		},
 		{
 			description: "validates tables",
-			input: Config{
-				Tables: []*TableConfig{{Name: "public.t1", MaxRows: -1}},
+			input: Seeder{
+				Tables: []*Table{{Name: "public.t1", MaxRows: -1}},
 			},
 			expectErr: "table public.t1: MaxRows must be >= 0",
 		},
 		{
 			description: "default values are correct",
-			input: Config{
-				Tables: []*TableConfig{{Name: "public.t1"}},
+			input: Seeder{
+				Tables: []*Table{{Name: "public.t1"}},
 			},
-			expectCfg: Config{
+			expectCfg: Seeder{
 				Schema:     defaultConfig.Schema,
 				MaxRows:    defaultConfig.MaxRows,
 				MaxRetries: defaultConfig.MaxRetries,
-				Tables: []*TableConfig{{
+				Tables: []*Table{{
 					Name:       "public.t1",
 					MaxRows:    defaultConfig.MaxRows,
 					MaxRetries: defaultConfig.MaxRetries,
@@ -67,35 +67,35 @@ func TestTableConfig(t *testing.T) {
 
 	testsSet := []struct {
 		description string
-		input       TableConfig
-		expectCfg   TableConfig
+		input       Table
+		expectCfg   Table
 		expectErr   string
 	}{
 		{
 			description: "invalid MaxRows errors",
-			input:       TableConfig{Name: "public.table1", MaxRows: -1},
+			input:       Table{Name: "public.table1", MaxRows: -1},
 			expectErr:   "MaxRows must be >= 0",
 		},
 		{
 			description: "invalid MaxRetries errors",
-			input:       TableConfig{Name: "public.table1", MaxRetries: -1},
+			input:       Table{Name: "public.table1", MaxRetries: -1},
 			expectErr:   "MaxRetries must be >= 0",
 		},
 		{
 			description: "no defaults when values are provided",
-			input: TableConfig{
+			input: Table{
 				Name:       "public.table1",
 				MaxRows:    1,
 				MaxRetries: 2,
 			},
-			expectCfg: TableConfig{
+			expectCfg: Table{
 				Name:       "public.table1",
 				MaxRows:    1,
 				MaxRetries: 2,
 			},
 		},
 	}
-	cfg := &Config{
+	cfg := &Seeder{
 		MaxRows:    defaultConfig.MaxRows,
 		MaxRetries: defaultConfig.MaxRetries,
 	}
