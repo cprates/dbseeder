@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
 
@@ -690,7 +689,6 @@ func TestGenValuesRanges(t *testing.T) {
 				if test.skipEval {
 					continue
 				}
-				// generated rows must satisfy the filter
 				require.True(t, expr.Eval(map[string]ir.Row{TestsSchema + "." + test.table: seederToParserRow(row)}))
 			}
 		})

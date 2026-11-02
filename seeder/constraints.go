@@ -8,6 +8,30 @@ import (
 	"github.com/cprates/dbseeder/internal/ir"
 )
 
+// asserts rows against non nullable columns.
+type conNotNull struct {
+	columns []Column
+}
+
+func newConNotNull(columns []Column) *conNotNull {
+	return &conNotNull{columns: columns}
+}
+
+// Assert asserts that row does not have nil values for columns that are not nullable.
+func (c *conNotNull) Assert(row Row) bool {
+	for _, col := range c.columns {
+		if !col.nullable && row[col.name].Val() == nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (c *conNotNull) Name() string {
+	return "Not Null"
+}
+
 // conUniqueIdx asserts rows against unique index constraints, this includes explicit, implicit (column defined)
 // and partial indexes, excludes primary keys which have their own type.
 type conUniqueIdx struct {

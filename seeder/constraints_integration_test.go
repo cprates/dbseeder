@@ -158,3 +158,59 @@ func TestConPK(t *testing.T) {
 		})
 	}
 }
+
+func TestConNotNull(t *testing.T) {
+	t.Parallel()
+
+	testsSet := []struct {
+		description string
+		table       string
+		dbSetup     string
+		run         func(t *testing.T, table *Table)
+	}{
+		{
+			description: "a null on a non nullable column errors",
+			dbSetup: `DROP TABLE IF EXISTS connotnullidx1;
+						CREATE TABLE connotnullidx1 (
+							c1 integer PRIMARY KEY,
+							c2 integer
+						);`,
+			table: "connotnullidx1",
+			run: func(t *testing.T, table *Table) {
+				row := Row{table.FQName(): nil}
+				table.columns[0].SetValue(row, nil)
+				table.columns[1].SetValue(row, 2)
+				cons := table.constraints[0]
+				ok := cons.Assert(row)
+				require.False(t, ok)
+			},
+		},
+		{
+			description: "a null on a nullable column succeeds",
+			dbSetup: `DROP TABLE IF EXISTS connotnullidx2;
+						CREATE TABLE connotnullidx2 (
+							c1 integer PRIMARY KEY,
+							c2 integer
+						);`,
+			table: "connotnullidx2",
+			run: func(t *testing.T, table *Table) {
+				row := Row{table.FQName(): nil}
+				table.columns[0].SetValue(row, 2)
+				cons := table.constraints[0]
+				ok := cons.Assert(row)
+				require.True(t, ok)
+			},
+		},
+	}
+
+	for _, test := range testsSet {
+		t.Run(test.description, func(t *testing.T) {
+			t.Parallel()
+
+			psql := setupPgTest(t, test.dbSetup)
+			table, err := psql.GetTable(context.Background(), TestsSchema, test.table)
+			require.NoError(t, err)
+			test.run(t, &table)
+		})
+	}
+}
