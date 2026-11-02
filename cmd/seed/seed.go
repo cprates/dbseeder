@@ -18,7 +18,7 @@ func seedCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "seed",
 		Usage: "seed a PostgreSQL database",
-		Description: "Connect with --dsn, or with --pg-db, --pg-user, and --pg-pwd. " +
+		Description: "Connect with --conn-str, or with --pg-db, --pg-user, and --pg-pwd. " +
 			"The two forms cannot be combined.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -42,7 +42,7 @@ func seedCommand() *cli.Command {
 }
 
 func seed(ctx context.Context, cmd *cli.Command) error {
-	dsn, err := connectionDSN(cmd)
+	connStr, err := connectionString(cmd)
 	if err != nil {
 		return cli.Exit(err, 1)
 	}
@@ -52,7 +52,7 @@ func seed(ctx context.Context, cmd *cli.Command) error {
 		return cli.Exit(err, 1)
 	}
 
-	db, err := sqlx.Connect(postgres.DriverName, dsn)
+	db, err := sqlx.Connect(postgres.DriverName, connStr)
 	if err != nil {
 		return cli.Exit(fmt.Errorf("unable to connect to DB: %w", err), 1)
 	}

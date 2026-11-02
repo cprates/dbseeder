@@ -17,25 +17,25 @@ func postgresConnectionFlags() cli.MutuallyExclusiveFlags {
 		Flags: [][]cli.Flag{
 			{
 				&cli.StringFlag{
-					Name:    "dsn",
+					Name:    "conn-str",
 					Usage:   "PostgreSQL connection string. Cannot be combined with the --pg-* flags",
-					Sources: cli.EnvVars("POSTGRES_DSN"),
+					Sources: cli.EnvVars("POSTGRES_CONN_STR"),
 				},
 			},
 			{
 				&cli.StringFlag{
 					Name:    "pg-db",
-					Usage:   "database name. Required when --dsn is not set",
+					Usage:   "database name. Required when --conn-str is not set",
 					Sources: cli.EnvVars("POSTGRES_DB"),
 				},
 				&cli.StringFlag{
 					Name:    "pg-user",
-					Usage:   "database user. Required when --dsn is not set",
+					Usage:   "database user. Required when --conn-str is not set",
 					Sources: cli.EnvVars("POSTGRES_USER"),
 				},
 				&cli.StringFlag{
 					Name:    "pg-pwd",
-					Usage:   "database password. Required when --dsn is not set",
+					Usage:   "database password. Required when --conn-str is not set",
 					Sources: cli.EnvVars("POSTGRES_PASSWORD"),
 				},
 				&cli.StringFlag{
@@ -55,12 +55,12 @@ func postgresConnectionFlags() cli.MutuallyExclusiveFlags {
 	}
 }
 
-func connectionDSN(cmd *cli.Command) (string, error) {
-	if cmd.IsSet("dsn") {
-		if cmd.String("dsn") == "" {
-			return "", errors.New("--dsn cannot be empty")
+func connectionString(cmd *cli.Command) (string, error) {
+	if cmd.IsSet("conn-str") {
+		if cmd.String("conn-str") == "" {
+			return "", errors.New("--conn-str cannot be empty")
 		}
-		return cmd.String("dsn"), nil
+		return cmd.String("conn-str"), nil
 	}
 
 	missing := missingValues(cmd, "pg-db", "pg-user", "pg-pwd")
@@ -69,7 +69,7 @@ func connectionDSN(cmd *cli.Command) (string, error) {
 		if len(missing) > 1 {
 			verb = "are"
 		}
-		return "", fmt.Errorf("%s %s required when --dsn is not set", joinWithAnd(missing), verb)
+		return "", fmt.Errorf("%s %s required when --conn-str is not set", joinWithAnd(missing), verb)
 	}
 
 	addr := cmd.String("pg-addr")
@@ -81,10 +81,10 @@ func connectionDSN(cmd *cli.Command) (string, error) {
 		return "", errors.New("--pg-port must be between 1 and 65535")
 	}
 
-	return postgresDSN(cmd.String("pg-user"), cmd.String("pg-pwd"), addr, port, cmd.String("pg-db")), nil
+	return postgresConnStr(cmd.String("pg-user"), cmd.String("pg-pwd"), addr, port, cmd.String("pg-db")), nil
 }
 
-func postgresDSN(user, password, addr string, port int, dbName string) string {
+func postgresConnStr(user, password, addr string, port int, dbName string) string {
 	u := &url.URL{
 		Scheme:  "postgres",
 		User:    url.UserPassword(user, password),
