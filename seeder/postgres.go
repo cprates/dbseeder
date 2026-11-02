@@ -198,6 +198,8 @@ func (p *Postgres) tableMetaToTable(ctx context.Context, meta postgres.TableMeta
 		}
 	}
 
+	table.constraints = append(table.constraints, newConNotNull(table.columns))
+
 	for _, con := range meta.UniqueIndexes() {
 		cols := make([]Column, len(con.ConCols))
 		for i, cd := range con.ConCols {
