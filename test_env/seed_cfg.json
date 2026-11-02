@@ -2,7 +2,7 @@
     "LogLevel":   0,
     "Schema":     "public",
     "MaxRows":    10000,
-    "MaxRetries": 3,
+    "MaxRetries": 5,
     "Tables": [
         {
             "Name": "public.unique_indexes_table",

@@ -8,7 +8,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func TestConnectionDSN(t *testing.T) {
+func TestConnectionString(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -18,8 +18,8 @@ func TestConnectionDSN(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "dsn alone",
-			args: []string{"seed", "--dsn", "postgres://user:secret@db.internal:5432/app?sslmode=require"},
+			name: "conn-str alone",
+			args: []string{"seed", "--conn-str", "postgres://user:secret@db.internal:5432/app?sslmode=require"},
 			want: "postgres://user:secret@db.internal:5432/app?sslmode=require",
 		},
 		{
@@ -38,29 +38,29 @@ func TestConnectionDSN(t *testing.T) {
 			want: "postgres://seed:p%40ss%20word@localhost:5432/app%2Fdb",
 		},
 		{
-			name:    "dsn combined with a pg flag",
-			args:    []string{"seed", "--dsn", "postgres://db", "--pg-db", "app"},
-			wantErr: "option dsn cannot be set along with option pg-db",
+			name:    "conn-str combined with a pg flag",
+			args:    []string{"seed", "--conn-str", "postgres://db", "--pg-db", "app"},
+			wantErr: "option conn-str cannot be set along with option pg-db",
 		},
 		{
-			name:    "dsn combined with several pg flags",
-			args:    []string{"seed", "--dsn", "postgres://db", "--pg-user", "seed", "--pg-port", "5432"},
-			wantErr: "option dsn cannot be set along with option pg-user",
+			name:    "conn-str combined with several pg flags",
+			args:    []string{"seed", "--conn-str", "postgres://db", "--pg-user", "seed", "--pg-port", "5432"},
+			wantErr: "option conn-str cannot be set along with option pg-user",
 		},
 		{
 			name:    "neither form is set",
 			args:    []string{"seed"},
-			wantErr: "one of these flags needs to be provided: dsn, pg-db pg-user pg-pwd pg-addr pg-port",
+			wantErr: "one of these flags needs to be provided: conn-str, pg-db pg-user pg-pwd pg-addr pg-port",
 		},
 		{
 			name:    "password missing",
 			args:    []string{"seed", "--pg-db", "app", "--pg-user", "seed"},
-			wantErr: "--pg-pwd is required when --dsn is not set",
+			wantErr: "--pg-pwd is required when --conn-str is not set",
 		},
 		{
-			name:    "empty dsn",
-			args:    []string{"seed", "--dsn", ""},
-			wantErr: "--dsn cannot be empty",
+			name:    "empty conn-str",
+			args:    []string{"seed", "--conn-str", ""},
+			wantErr: "--conn-str cannot be empty",
 		},
 		{
 			name:    "empty host",
@@ -73,7 +73,7 @@ func TestConnectionDSN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, gotErr := runConnectionDSN(t, tc.args)
+			got, gotErr := runConnectionString(t, tc.args)
 			if tc.wantErr != "" {
 				if gotErr == nil || gotErr.Error() != tc.wantErr {
 					t.Fatalf("err=%v, want %q", gotErr, tc.wantErr)
@@ -84,17 +84,17 @@ func TestConnectionDSN(t *testing.T) {
 				t.Fatal(gotErr)
 			}
 			if got != tc.want {
-				t.Fatalf("dsn=%q, want %q", got, tc.want)
+				t.Fatalf("conn-str=%q, want %q", got, tc.want)
 			}
 		})
 	}
 }
 
-func runConnectionDSN(t *testing.T, args []string) (string, error) {
+func runConnectionString(t *testing.T, args []string) (string, error) {
 	t.Helper()
 
-	var dsn string
-	var dsnErr error
+	var connStr string
+	var connStrErr error
 	command := &cli.Command{
 		Name: "seed",
 		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
@@ -103,12 +103,12 @@ func runConnectionDSN(t *testing.T, args []string) (string, error) {
 		Writer:    io.Discard,
 		ErrWriter: io.Discard,
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			dsn, dsnErr = connectionDSN(cmd)
+			connStr, connStrErr = connectionString(cmd)
 			return nil
 		},
 	}
 	if err := command.Run(context.Background(), args); err != nil {
 		return "", err
 	}
-	return dsn, dsnErr
+	return connStr, connStrErr
 }
