@@ -75,8 +75,7 @@ func GenTimestamptz() time.Time {
 }
 
 func GenDate() time.Time {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return time.Now()
 }
 
 func GenInt16() int16 {
