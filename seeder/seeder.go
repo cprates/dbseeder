@@ -133,7 +133,6 @@ func (s *Seeder) seedTable(ctx context.Context, tableCfg *config.Table) error {
 				if err != nil {
 					return fmt.Errorf("unable to get table %s: %w", tableName, err)
 				}
-				// TODO make table.rows a type and here call a method like Add. This will help stream this data to a file
 				table.rows = append(table.rows, row)
 			}
 
