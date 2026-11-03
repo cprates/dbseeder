@@ -380,3 +380,21 @@ WHERE
 
 	return nil
 }
+
+// Returns all user tables for schema.
+func (i *Inspector) getSchemaTables(ctx context.Context, schema string) ([]string, error) {
+	q := `
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = $1
+  AND table_type = 'BASE TABLE'
+ORDER BY table_name;
+`
+	names := make([]string, 0)
+	err := i.db.SelectContext(ctx, &names, q, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return names, nil
+}

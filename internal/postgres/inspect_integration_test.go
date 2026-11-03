@@ -505,6 +505,33 @@ CREATE TABLE $name (
 	}
 }
 
+func TestGetSchemaTables(t *testing.T) {
+	t.Parallel()
+
+	table := strings.ToLower(t.Name())
+	psql := setupTest(t, strings.ReplaceAll(`
+DROP TABLE IF EXISTS $name_0;
+DROP TABLE IF EXISTS $name_1;
+	
+DROP SCHEMA IF EXISTS alltablestest;
+CREATE SCHEMA alltablestest;
+
+CREATE TABLE $name_0 (
+    id integer PRIMARY KEY
+);
+
+CREATE TABLE $name_1 (
+    id integer PRIMARY KEY
+);
+`, "$name", "alltablestest."+table))
+
+	names, err := psql.getSchemaTables(context.Background(), "alltablestest")
+	require.NoError(t, err)
+	slices.Sort(names)
+	expectNames := []string{table + "_0", table + "_1"}
+	require.Equal(t, expectNames, names)
+}
+
 func setupTest(t *testing.T, q string) *Inspector {
 	t.Helper()
 
