@@ -35,6 +35,23 @@ func NewInspector(db *sql.DB) *Inspector {
 	}
 }
 
+func (i *Inspector) Tables(ctx context.Context, schema string) ([]TableMeta, error) {
+	names, err := i.getSchemaTables(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("getting tables names: %w", err)
+	}
+
+	tables := make([]TableMeta, len(names))
+	for idx, name := range names {
+		tables[idx], err = i.TableWithSchema(ctx, schema, name)
+		if err != nil {
+			return nil, fmt.Errorf("getting table %s: %w", name, err)
+		}
+	}
+
+	return tables, nil
+}
+
 // Table returns a table metadata for a table with name in the default schema "public".
 func (i *Inspector) Table(ctx context.Context, name string) (TableMeta, error) {
 	return i.TableWithSchema(ctx, DefaultSchema, name)
@@ -167,10 +184,10 @@ WHERE
 	c.table_schema = $1
 	AND c.table_name = $2
 	AND a.attname = c.column_name
-	AND a.attrelid = $2::regclass;`
+	AND a.attrelid = $3::regclass;`
 
 	cols := make([]*ColumnMeta, 0)
-	err := i.db.SelectContext(ctx, &cols, q, tableName.Schema(), tableName.Simple())
+	err := i.db.SelectContext(ctx, &cols, q, tableName.Schema(), tableName.Simple(), tableName.FQ())
 	if err != nil {
 		return nil, err
 	}

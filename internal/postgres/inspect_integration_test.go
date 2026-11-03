@@ -22,7 +22,7 @@ func TestGetTableMetadata_UnknownTableOrNoColumnsErrors(t *testing.T) {
 	inspector := setupTest(t, "")
 	_, err := inspector.Table(context.Background(), "some_dummy_table_that_is_not_created")
 	require.Error(t, err)
-	require.Equal(t, "getting columns for public.some_dummy_table_that_is_not_created: ERROR: relation \"some_dummy_table_that_is_not_created\" does not exist (SQLSTATE 42P01)", err.Error())
+	require.Equal(t, "getting columns for public.some_dummy_table_that_is_not_created: ERROR: relation \"public.some_dummy_table_that_is_not_created\" does not exist (SQLSTATE 42P01)", err.Error())
 }
 
 func TestGetTableMetadata_PrimaryKeyWithSingleColumn(t *testing.T) {
@@ -530,6 +530,31 @@ CREATE TABLE $name_1 (
 	slices.Sort(names)
 	expectNames := []string{table + "_0", table + "_1"}
 	require.Equal(t, expectNames, names)
+}
+
+func TestTables(t *testing.T) {
+	t.Parallel()
+
+	table := strings.ToLower(t.Name())
+	psql := setupTest(t, strings.ReplaceAll(`
+DROP TABLE IF EXISTS $name_0;
+DROP TABLE IF EXISTS $name_1;
+	
+DROP SCHEMA IF EXISTS tablestest;
+CREATE SCHEMA tablestest;
+
+CREATE TABLE $name_0 (
+    id integer PRIMARY KEY
+);
+
+CREATE TABLE $name_1 (
+    id integer PRIMARY KEY
+);
+`, "$name", "tablestest."+table))
+
+	metas, err := psql.Tables(context.Background(), "tablestest")
+	require.NoError(t, err)
+	require.Len(t, metas, 2)
 }
 
 func setupTest(t *testing.T, q string) *Inspector {
