@@ -23,14 +23,16 @@ func TestConfig(t *testing.T) {
 		{
 			description: "validates tables",
 			input: Seeder{
-				Tables: []*Table{{Name: "public.t1", MaxRows: -1}},
+				Schema: "public",
+				Tables: []*Table{{Name: "t1", MaxRows: -1}},
 			},
-			expectErr: "table public.t1: MaxRows must be >= 0",
+			expectErr: "table t1: MaxRows must be >= 0",
 		},
 		{
 			description: "default values are correct",
 			input: Seeder{
-				Tables: []*Table{{Name: "public.t1"}},
+				Schema: "public",
+				Tables: []*Table{{Name: "t1"}},
 			},
 			expectCfg: Seeder{
 				Schema:     defaultConfig.Schema,
@@ -73,18 +75,18 @@ func TestTableConfig(t *testing.T) {
 	}{
 		{
 			description: "invalid MaxRows errors",
-			input:       Table{Name: "public.table1", MaxRows: -1},
+			input:       Table{Name: "table1", MaxRows: -1},
 			expectErr:   "MaxRows must be >= 0",
 		},
 		{
 			description: "invalid MaxRetries errors",
-			input:       Table{Name: "public.table1", MaxRetries: -1},
+			input:       Table{Name: "table1", MaxRetries: -1},
 			expectErr:   "MaxRetries must be >= 0",
 		},
 		{
 			description: "no defaults when values are provided",
 			input: Table{
-				Name:       "public.table1",
+				Name:       "table1",
 				MaxRows:    1,
 				MaxRetries: 2,
 			},
@@ -96,6 +98,7 @@ func TestTableConfig(t *testing.T) {
 		},
 	}
 	cfg := &Seeder{
+		Schema:     "public",
 		MaxRows:    defaultConfig.MaxRows,
 		MaxRetries: defaultConfig.MaxRetries,
 	}

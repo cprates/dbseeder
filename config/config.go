@@ -9,7 +9,7 @@ import (
 )
 
 type Table struct {
-	// Name is the fully qualified name of the table, e.g.: public.table0
+	// Name is the fully qualified name of the table, e.g.: table0
 	Name string
 	// MaxRows overrides general MaxRows
 	MaxRows int
@@ -76,10 +76,6 @@ func Load(path string) (*Seeder, error) {
 }
 
 func (t *Table) Validate(c *Seeder) error {
-	if parts := strings.Split(t.Name, "."); len(parts) != 2 {
-		return fmt.Errorf("table name %s is missing schema", t.Name)
-	}
-
 	if t.MaxRows == 0 {
 		t.MaxRows = c.MaxRows
 	}
@@ -93,6 +89,8 @@ func (t *Table) Validate(c *Seeder) error {
 	if t.MaxRetries < 0 {
 		return errors.New("MaxRetries must be >= 0")
 	}
+
+	t.Name = c.Schema + "." + t.Name
 
 	return nil
 }
