@@ -5,20 +5,20 @@
     "MaxRetries": 5,
     "Tables": [
         {
-            "Name": "public.unique_indexes_table",
+            "Name": "unique_indexes_table",
             "SQLFilter": "select * from unique_indexes_table WHERE id > 0 AND id < 10000;"
         },
         {
-            "Name": "public.fks_table_child1"
+            "Name": "fks_table_child1"
         },
         {
-            "Name": "public.fks_table_child2"
+            "Name": "fks_table_child2"
         },
         {
-            "Name": "public.fks_table_child20"
+            "Name": "fks_table_child20"
         },
         {
-            "Name": "public.fks_table"
+            "Name": "fks_table"
         }
     ],
     "DryRun": false
