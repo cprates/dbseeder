@@ -37,7 +37,10 @@ type Seeder struct {
 	// applied per row so the maximum amount of retries seeding a table is MaxRows * MaxRetries.
 	// Defaults to 3
 	MaxRetries int
-	// Tables is the list of all tables to be seeded
+	// SeedAll seeds all user DBs under Schema.
+	// Defaults to true
+	SeedAll *bool
+	// Tables is the list of all tables to be seeded.
 	Tables []*Table
 	// OutputPath is the path where to store the SQL script with the generated data. Set to 'stdout' to print to
 	// stdout.
@@ -56,41 +59,56 @@ var (
 	}
 )
 
-func Load(path string) (*Seeder, error) {
+func Load(path string) (Seeder, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read config file at %s: %w", path, err)
+		return Seeder{}, fmt.Errorf("unable to read config file at %s: %w", path, err)
 	}
 
-	cfg := &Seeder{}
-	if err := json.Unmarshal(b, cfg); err != nil {
-		return nil, fmt.Errorf("unable to parse config: %w", err)
+	cfg := Seeder{}
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return Seeder{}, fmt.Errorf("unable to parse config: %w", err)
 	}
 
 	err = cfg.Validate()
 	if err != nil {
-		return nil, err
+		return Seeder{}, err
 	}
 
 	return cfg, nil
 }
 
-func (t *Table) Validate(c *Seeder) error {
+func (s *Seeder) SeedAllTables() bool {
+	if s.SeedAll == nil {
+		return true
+	}
+
+	return *s.SeedAll
+}
+
+// AddDefaultTable add a new table to Tables with name into the list of configured tables.
+func (s *Seeder) AddDefaultTable(name string) {
+	cfg := &Table{Name: name}
+	_ = cfg.Validate(s)
+	s.Tables = append(s.Tables, cfg)
+}
+
+func (t *Table) Validate(s *Seeder) error {
 	if t.MaxRows == 0 {
-		t.MaxRows = c.MaxRows
+		t.MaxRows = s.MaxRows
 	}
 	if t.MaxRows < 0 {
 		return errors.New("MaxRows must be >= 0")
 	}
 
 	if t.MaxRetries == 0 {
-		t.MaxRetries = c.MaxRetries
+		t.MaxRetries = s.MaxRetries
 	}
 	if t.MaxRetries < 0 {
 		return errors.New("MaxRetries must be >= 0")
 	}
 
-	t.Name = c.Schema + "." + t.Name
+	t.Name = s.Schema + "." + t.Name
 
 	return nil
 }
@@ -113,34 +131,36 @@ func (c *Seeder) GetTableCfg(fqName string) *Table {
 }
 
 // Validate validates config and sets default values.
-func (c *Seeder) Validate() error {
-	if c.Schema == "" {
-		c.Schema = defaultConfig.Schema
+func (s *Seeder) Validate() error {
+	if s.Schema == "" {
+		s.Schema = defaultConfig.Schema
 	}
 
-	if c.MaxRows == 0 {
-		c.MaxRows = defaultConfig.MaxRows
+	if s.MaxRows == 0 {
+		s.MaxRows = defaultConfig.MaxRows
 	}
-	if c.MaxRows < 0 {
+	if s.MaxRows < 0 {
 		return errors.New("MaxRows must be >= 0")
 	}
 
-	if c.MaxRetries == 0 {
-		c.MaxRetries = defaultConfig.MaxRetries
+	if s.MaxRetries == 0 {
+		s.MaxRetries = defaultConfig.MaxRetries
 	}
-	if c.MaxRetries < 0 {
+	if s.MaxRetries < 0 {
 		return errors.New("MaxRetries must be >= 0")
 	}
 
-	if c.OutputPath == "" {
-		c.OutputPath = defaultConfig.OutputPath
+	if s.OutputPath == "" {
+		s.OutputPath = defaultConfig.OutputPath
 	}
 
-	if len(c.Tables) == 0 {
-		return errors.New("no tables configured")
+	if s.SeedAll == nil {
+		b := true
+		s.SeedAll = &b
 	}
-	for _, tableCfg := range c.Tables {
-		if err := tableCfg.Validate(c); err != nil {
+
+	for _, tableCfg := range s.Tables {
+		if err := tableCfg.Validate(s); err != nil {
 			return fmt.Errorf("table %s: %w", tableCfg.Name, err)
 		}
 	}

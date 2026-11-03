@@ -12,6 +12,7 @@ import (
 )
 
 type Database interface {
+	GetTables(ctx context.Context, schema string) ([]Table, error)
 	GetTable(ctx context.Context, schema, name string) (Table, error)
 	GenSQLScript(ctx context.Context, tables []*Table) (string, error)
 	Parse(ctx context.Context, query string) (ir.Expression, error)
@@ -39,6 +40,13 @@ func New(cfg config.Seeder, db Database) *Seeder {
 }
 
 func (s *Seeder) Seed(ctx context.Context) error {
+	if s.cfg.SeedAllTables() {
+		err := s.genTablesConfig(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	// TODO: build the dependency graphs and seed each one in parallel.
 	for _, tableCfg := range s.cfg.Tables {
 		if tableCfg.MaxRows == 0 {
@@ -67,6 +75,25 @@ func (s *Seeder) Seed(ctx context.Context) error {
 	}
 
 	return s.db.ExecScript(ctx, sqlScript)
+}
+
+func (s *Seeder) genTablesConfig(ctx context.Context) error {
+	schemaTables, err := s.db.GetTables(ctx, s.cfg.Schema)
+	if err != nil {
+		return fmt.Errorf("getting tables for schema %s: %w", s.cfg.Schema, err)
+	}
+
+	for _, table := range schemaTables {
+		tCfg := s.cfg.GetTableCfg(table.FQName())
+		if tCfg != nil {
+			// there's an overwrite, don't touch it
+			continue
+		}
+
+		s.cfg.AddDefaultTable(table.Name())
+	}
+
+	return nil
 }
 
 func (s *Seeder) seedTable(ctx context.Context, tableCfg *config.Table) error {

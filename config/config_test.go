@@ -9,6 +9,7 @@ import (
 func TestConfig(t *testing.T) {
 	t.Parallel()
 
+	bTrue := true
 	testsSet := []struct {
 		description string
 		input       Seeder
@@ -16,9 +17,15 @@ func TestConfig(t *testing.T) {
 		expectErr   string
 	}{
 		{
-			description: "no configured tables error",
+			description: "no configured tables succeed",
 			input:       Seeder{},
-			expectErr:   "no tables configured",
+			expectCfg: Seeder{
+				Schema:     defaultConfig.Schema,
+				MaxRows:    defaultConfig.MaxRows,
+				MaxRetries: defaultConfig.MaxRetries,
+				SeedAll:    &bTrue,
+				OutputPath: defaultConfig.OutputPath,
+			},
 		},
 		{
 			description: "validates tables",
@@ -38,6 +45,7 @@ func TestConfig(t *testing.T) {
 				Schema:     defaultConfig.Schema,
 				MaxRows:    defaultConfig.MaxRows,
 				MaxRetries: defaultConfig.MaxRetries,
+				SeedAll:    &bTrue,
 				Tables: []*Table{{
 					Name:       "public.t1",
 					MaxRows:    defaultConfig.MaxRows,
@@ -117,4 +125,61 @@ func TestTableConfig(t *testing.T) {
 			require.Equal(t, test.expectCfg, test.input)
 		})
 	}
+}
+
+func TestSeedAllTables(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil SeedAll defaults to true", func(t *testing.T) {
+		s := &Seeder{}
+		require.True(t, s.SeedAllTables())
+	})
+
+	t.Run("false SeedAll returns false", func(t *testing.T) {
+		bSeedAll := false
+		s := &Seeder{SeedAll: &bSeedAll}
+		require.NoError(t, s.Validate())
+		require.False(t, s.SeedAllTables())
+	})
+
+	t.Run("true SeedAll returns true", func(t *testing.T) {
+		bSeedAll := true
+		s := &Seeder{SeedAll: &bSeedAll}
+		require.NoError(t, s.Validate())
+		require.True(t, s.SeedAllTables())
+	})
+}
+
+func TestSimpleName(t *testing.T) {
+	t.Parallel()
+
+	tbl := &Table{Name: "schema.name"}
+	require.Equal(t, "name", tbl.SimpleName())
+}
+
+func TestGetTableCfg(t *testing.T) {
+	t.Parallel()
+
+	cdr := &Seeder{Tables: []*Table{
+		{Name: "schema.name1"},
+		{Name: "schema.name2"},
+	}}
+	require.Nil(t, cdr.GetTableCfg("schema.namex"))
+	require.Equal(t, &Table{Name: "schema.name1"}, cdr.GetTableCfg("schema.name1"))
+	require.Equal(t, &Table{Name: "schema.name2"}, cdr.GetTableCfg("schema.name2"))
+}
+
+func TestAddDefaultTable(t *testing.T) {
+	t.Parallel()
+
+	cdr := &Seeder{}
+	require.NoError(t, cdr.Validate())
+	cdr.AddDefaultTable("table1")
+	cfg := cdr.GetTableCfg("public.table1")
+	expectCfg := &Table{
+		Name:       "public.table1",
+		MaxRows:    defaultConfig.MaxRows,
+		MaxRetries: defaultConfig.MaxRetries,
+	}
+	require.Equal(t, expectCfg, cfg)
 }

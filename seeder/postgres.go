@@ -25,6 +25,25 @@ func NewPostgres(db *sql.DB) *Postgres {
 	}
 }
 
+func (p *Postgres) GetTables(ctx context.Context, schema string) ([]Table, error) {
+	tablesMeta, err := p.inspector.Tables(ctx, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	tables := make([]Table, len(tablesMeta))
+	for i, tMeta := range tablesMeta {
+		tables[i], err = p.tableMetaToTable(ctx, tMeta, schema, tMeta.Name().Simple())
+		if err != nil {
+			return nil, fmt.Errorf("converting table metadata: %w", err)
+		}
+
+		p.cache.Store(tables[i].FQName(), tables[i])
+	}
+
+	return tables, nil
+}
+
 func (p *Postgres) GetTable(ctx context.Context, schema, name string) (Table, error) {
 	if td, ok := p.cache.Load(schema + "." + name); ok {
 		return td.(Table), nil
