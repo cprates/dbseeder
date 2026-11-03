@@ -51,7 +51,8 @@ func TestConUniqueIdx(t *testing.T) {
 				row := Row{table.FQName(): nil}
 				table.columns[0].SetValue(row, 2)
 				table.columns[1].SetValue(row, 2)
-				cons := table.constraints[0]
+				cons := table.constraints[1]
+				require.Equal(t, "Unique Index conuniqueidx_uidx1", cons.Name())
 				ok := cons.Assert(row)
 				require.True(t, ok)
 				table.columns[0].SetValue(row, 2)
@@ -71,9 +72,12 @@ func TestConUniqueIdx(t *testing.T) {
 			table: "conuniqueidx2",
 			run: func(t *testing.T, table *Table) {
 				row := Row{table.FQName(): nil}
+				// c1
 				table.columns[0].SetValue(row, 2)
+				// c2
 				table.columns[1].SetValue(row, 2)
-				cons := table.constraints[0]
+				cons := table.constraints[1]
+				require.Equal(t, "Unique Index conuniqueidx2_uidx1", cons.Name())
 				ok := cons.Assert(row)
 				require.True(t, ok)
 				ok = cons.Assert(row)
@@ -89,7 +93,7 @@ func TestConUniqueIdx(t *testing.T) {
 						CREATE UNIQUE INDEX conuniqueidx3_uidx1 ON conuniqueidx3 (c1);`,
 			table: "conuniqueidx3",
 			run: func(t *testing.T, table *Table) {
-				cons := table.constraints[0]
+				cons := table.constraints[1]
 				require.Equal(t, "Unique Index conuniqueidx3_uidx1", cons.Name())
 			},
 		},
@@ -126,7 +130,8 @@ func TestConPK(t *testing.T) {
 			run: func(t *testing.T, table *Table) {
 				row := Row{table.FQName(): nil}
 				table.columns[0].SetValue(row, 2)
-				cons := table.constraints[0]
+				cons := table.constraints[1]
+				require.Equal(t, "Primary Key conpkidx1_pkey", cons.Name())
 				ok := cons.Assert(row)
 				require.True(t, ok)
 				ok = cons.Assert(row)
@@ -141,7 +146,7 @@ func TestConPK(t *testing.T) {
 						);`,
 			table: "conpkidx2",
 			run: func(t *testing.T, table *Table) {
-				cons := table.constraints[0]
+				cons := table.constraints[1]
 				require.Equal(t, "Primary Key conpkidx2_pkey", cons.Name())
 			},
 		},
