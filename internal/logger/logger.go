@@ -1,6 +1,9 @@
 package logger
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Logger interface {
 	Log(fmt string, args ...any)
@@ -13,7 +16,7 @@ func NewTextLogger() *TextLogger {
 }
 
 func (TextLogger) Log(format string, args ...any) {
-	fmt.Printf(format, args...)
+	fmt.Printf("[%s] "+format, append([]any{time.Now().Format(time.TimeOnly)}, args...)...)
 }
 
 type NullLogger struct{}
