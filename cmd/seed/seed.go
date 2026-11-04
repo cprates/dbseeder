@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/cprates/dbseeder/config"
+	"github.com/cprates/dbseeder/internal/logger"
 	"github.com/cprates/dbseeder/internal/postgres"
 	"github.com/cprates/dbseeder/seeder"
 )
@@ -17,12 +18,12 @@ import (
 func seedCommand() *cli.Command {
 	return &cli.Command{
 		Name:        "seed",
-		Usage:       "seed a PostgreSQL database",
-		Description: "Connect with --conn-str.",
+		Usage:       "seed --conn-str 'postgres://...' [--cfg ...]",
+		Description: "Seed a PostgreSQL database",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:      "cfg",
-				Usage:     "path to the seed config file. See the entire DB with default settings is left empty",
+				Usage:     "Path to the seed config file. Seed all DB tables with default settings if left empty",
 				TakesFile: true,
 				Required:  false,
 			},
@@ -55,13 +56,15 @@ func seed(ctx context.Context, cmd *cli.Command) error {
 		return cli.Exit(fmt.Errorf("unable to connect to DB: %w", err), 1)
 	}
 
-	fmt.Printf("[%s] Starting...\n", time.Now().Format(time.DateTime))
+	lgr := logger.NewTextLogger()
+
+	lgr.Log("Starting...\n")
 	start := time.Now()
 	if err := seeder.New(cfg, seeder.NewPostgres(db.DB)).Seed(ctx); err != nil {
 		return cli.Exit(fmt.Errorf("failed to seed DB: %w", err), 1)
 	}
 
-	fmt.Printf("[%s] database seeded in %s\n", time.Now().Format(time.DateTime), time.Since(start))
+	lgr.Log("Database seeded in %s\n", time.Since(start))
 	return nil
 }
 
