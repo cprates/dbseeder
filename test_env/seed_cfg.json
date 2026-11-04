@@ -3,6 +3,7 @@
     "Schema":     "public",
     "MaxRows":    10000,
     "MaxRetries": 5,
+    "SeedAll": false,
     "Tables": [
         {
             "Name": "unique_indexes_table",

@@ -22,6 +22,7 @@ type Table struct {
 	SQLFilter string
 }
 
+// Seeder is the set of configs for a DB seeder. An empty Seeder is a valid configuration with default values.
 type Seeder struct {
 	// LogLevel
 	// 0: disabled
@@ -46,7 +47,8 @@ type Seeder struct {
 	// stdout.
 	// Defaults to seed.sql
 	OutputPath string
-	// DryRun generates the data without storing it in the DB when set to true
+	// DryRun generates the data without storing it in the DB when set to true.
+	// Defaults to false
 	DryRun bool
 }
 
