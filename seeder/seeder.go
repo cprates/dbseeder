@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/cprates/dbseeder/config"
 	"github.com/cprates/dbseeder/internal/ir"
@@ -84,6 +85,10 @@ func (s *Seeder) genTablesConfig(ctx context.Context) error {
 	}
 
 	for _, table := range schemaTables {
+		if slices.Contains(s.cfg.ExcludeTables, table.Name()) {
+			continue
+		}
+
 		tCfg := s.cfg.GetTableCfg(table.FQName())
 		if tCfg != nil {
 			// there's an overwrite, don't touch it

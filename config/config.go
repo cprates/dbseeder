@@ -27,6 +27,7 @@ type Seeder struct {
 	// LogLevel
 	// 0: disabled
 	// 1: enabled
+	// Defaults to 0
 	LogLevel int
 	// Schema Tables are in. Defaults to "public" when not specified
 	Schema string
@@ -41,8 +42,11 @@ type Seeder struct {
 	// SeedAll seeds all user DBs under Schema.
 	// Defaults to true
 	SeedAll *bool
-	// Tables is the list of all tables to be seeded.
+	// Tables is the list of all tables to be seeded. If SeedAll is true, defining a table here overwrites the default
+	// configuration.
 	Tables []*Table
+	// ExcludeTables is a list of table names to be excluded. Useful when SeedAll is set to true.
+	ExcludeTables []string
 	// OutputPath is the path where to store the SQL script with the generated data. Set to 'stdout' to print to
 	// stdout.
 	// Defaults to seed.sql
@@ -164,6 +168,14 @@ func (s *Seeder) Validate() error {
 	for _, tableCfg := range s.Tables {
 		if err := tableCfg.Validate(s); err != nil {
 			return fmt.Errorf("table %s: %w", tableCfg.Name, err)
+		}
+	}
+
+	for _, excludedTable := range s.ExcludeTables {
+		for _, table := range s.Tables {
+			if excludedTable == table.SimpleName() {
+				return fmt.Errorf("table %s cannot be part of both seed and exclude lists", excludedTable)
+			}
 		}
 	}
 
