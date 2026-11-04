@@ -54,6 +54,15 @@ func TestConfig(t *testing.T) {
 				OutputPath: defaultConfig.OutputPath,
 			},
 		},
+		{
+			description: "same table name in both seed and exclude lists fails validation",
+			input: Seeder{
+				Schema:        "public",
+				Tables:        []*Table{{Name: "t1"}},
+				ExcludeTables: []string{"t0", "t1"},
+			},
+			expectErr: "table t1 cannot be part of both seed and exclude lists",
+		},
 	}
 	for _, test := range testsSet {
 		t.Run(test.description, func(t *testing.T) {
