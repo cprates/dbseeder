@@ -1,25 +1,26 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"go.yaml.in/yaml/v4"
 )
 
 type Table struct {
 	// Name is the fully qualified name of the table, e.g.: table0
-	Name string
+	Name string `yaml:"name"`
 	// MaxRows overrides general MaxRows
-	MaxRows int
+	MaxRows int `yaml:"maxRows"`
 	// MaxRetries overrides general MaxRetries
-	MaxRetries int
+	MaxRetries int `yaml:"maxRetries"`
 	// SQLFilter is an optional SQL query that adds extra constraints to the generated seed data on top of the
 	// constraints from the schema itself, e.g.: express relationships with other tables with `JOIN`s or constrain
 	// the generated values for a column with `column IN (1, 2, 3)`.
 	// Check documentation for details and limitations.
-	SQLFilter string
+	SQLFilter string `yaml:"sqlFilter"`
 }
 
 // Seeder is the set of configs for a DB seeder. An empty Seeder is a valid configuration with default values.
@@ -28,32 +29,32 @@ type Seeder struct {
 	// 0: disabled
 	// 1: enabled
 	// Defaults to 0
-	LogLevel int
+	LogLevel int `yaml:"logLevel"`
 	// Schema Tables are in. Defaults to "public" when not specified
-	Schema string
+	Schema string `yaml:"schema"`
 	// MaxRows is the max. number of rows to seed a table with. The final result may be higher, e.g. a
 	// a table referenced by other table foreign key, or lower, e.g.: tables with unique indexes and check constraints.
 	// Defaults to 100
-	MaxRows int
+	MaxRows int `yaml:"maxRows"`
 	// MaxRetries is the max. number of times a new row is regenerated after failing to satisfy a constraint. It is
 	// applied per row so the maximum amount of retries seeding a table is MaxRows * MaxRetries.
 	// Defaults to 3
-	MaxRetries int
+	MaxRetries int `yaml:"maxRetries"`
 	// SeedAll seeds all user DBs under Schema.
 	// Defaults to true
-	SeedAll *bool
+	SeedAll *bool `yaml:"seedAll"`
 	// Tables is the list of all tables to be seeded. If SeedAll is true, defining a table here overwrites the default
 	// configuration.
-	Tables []*Table
+	Tables []*Table `yaml:"tables"`
 	// ExcludeTables is a list of table names to be excluded. Useful when SeedAll is set to true.
-	ExcludeTables []string
+	ExcludeTables []string `yaml:"excludeTables"`
 	// OutputPath is the path where to store the SQL script with the generated data. Set to 'stdout' to print to
 	// stdout.
 	// Defaults to seed.sql
-	OutputPath string
+	OutputPath string `yaml:"outputPath"`
 	// DryRun generates the data without storing it in the DB when set to true.
 	// Defaults to false
-	DryRun bool
+	DryRun bool `yaml:"dryRun"`
 }
 
 var (
@@ -72,7 +73,7 @@ func Load(path string) (Seeder, error) {
 	}
 
 	cfg := Seeder{}
-	if err := json.Unmarshal(b, &cfg); err != nil {
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
 		return Seeder{}, fmt.Errorf("unable to parse config: %w", err)
 	}
 
