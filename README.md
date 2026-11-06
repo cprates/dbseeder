@@ -79,8 +79,8 @@ Check the configuration below for more details and limitations.
 | `date` | Current time in the local location. |
 | `timestamp` | Current time in UTC. |
 | `timestamptz` | Current time in the local location. |
-| `uuid` | A new UUID string. |
-| `uuid[]` | A one-element array literal holding one UUID. |
+| `uuid` | A new UUID V4 string. |
+| `uuid[]` | A one-element array literal holding one UUID V4. |
 | `json`, `jsonb` | `{"numeric_field0": <int>}`. |
 | `enum` | One of the labels defined on that enum. |
 
@@ -204,11 +204,15 @@ WHERE
 
 Check constraints and partial-index predicates essentially share the same capabilities and limitations of `SQLFilter`.
 
-TODO
+
 ## Caveats
-- If table `B` has a primary key whose check constraint allows only a few values (`id = 0 OR id = 1 OR id = 2 OR id = 3`) and table `A` references `B`, seeding `B` first can consume every legal key. `A` then has no parent row left to point at.
-- Low-cardinality columns, such as `varchar(1)` or a unique index over a boolean, cause many retries and slow the run down.
-- `<>` against a constant retries up to 10 times and panics if every attempt still matches. The same cap applies to column-to-column inequality.
+* If table `B` has a primary key whose check constraint allows only a few values (`id = 0 OR id = 1 OR id = 2 OR id = 3`)
+  and table `A` references `B`, seeding `B` first can consume every possible key. `A` then has no parent row left to
+  point at.
+* Low-cardinality columns, such as `varchar(1)` or a unique index over a boolean, cause many retries and slow the
+  seeding process down.
+* If table `B` is referenced by `A`, e.g. a foreign key, `B` is seeded once with its own constraints, and seeded
+  again along with `A` constraints.
 
 
 ## Planned work
@@ -220,11 +224,3 @@ TODO
 - Add support for more Postgres types based on demand
 - Add support for range operators on more types
 - Investigate what would take to add support for basic functions like `UPPER`, `LOWER`, `CONCAT`, etc
-
-
-## FAQ
-
-**Why are some tables seeded with more rows then the maximum defined?**
-
-If table1 is referenced by table0, e.g. a foreign key, table1 is seeded once with its own constraints, and seeded
-again along with table0 constraints.
