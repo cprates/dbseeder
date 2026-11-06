@@ -3,6 +3,7 @@ logLevel: 0
 schema: public
 maxRows: 10000
 maxRetries: 5
+dryRun: false
 seedAll: false
 tables:
   - name: unique_indexes_table
@@ -15,4 +16,3 @@ tables:
   - name: fks_table_child2
   - name: fks_table_child20
   - name: fks_table
-dryRun: false
