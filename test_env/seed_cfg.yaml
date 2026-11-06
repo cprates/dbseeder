@@ -1,0 +1,18 @@
+---
+logLevel: 0
+schema: public
+maxRows: 10000
+maxRetries: 5
+seedAll: false
+tables:
+  - name: unique_indexes_table
+    sqlFilter: |
+      SELECT * FROM unique_indexes_table
+      WHERE 
+        id > 0
+        AND id < 10000;
+  - name: fks_table_child1
+  - name: fks_table_child2
+  - name: fks_table_child20
+  - name: fks_table
+dryRun: false

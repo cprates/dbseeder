@@ -209,7 +209,7 @@ Check constraints and partial-index predicates essentially share the same capabi
 * If table `B` has a primary key whose check constraint allows only a few values (`id = 0 OR id = 1 OR id = 2 OR id = 3`)
   and table `A` references `B`, seeding `B` first can consume every possible key. `A` then has no parent row left to
   point at.
-* Low-cardinality columns, such as `varchar(1)` or a unique index over a boolean, cause many retries and slow the
+* Low cardinality columns, such as `varchar(1)` or a unique index over a boolean, cause many retries and slow the
   seeding process down.
 * If table `B` is referenced by `A`, e.g. a foreign key, `B` is seeded once with its own constraints, and seeded
   again along with `A` constraints.
@@ -219,7 +219,7 @@ Check constraints and partial-index predicates essentially share the same capabi
 
 - Plug in generators and improved table analysis so values can follow real domains instead being completely random
 - Add support for type cast operations
-- Add support for serial ids - auto increment - probably leave out of the generations any column with that type would sort it
+- Add support for serial ids
 - Cut the memory consumption
 - Add support for more Postgres types based on demand
 - Add support for range operators on more types
