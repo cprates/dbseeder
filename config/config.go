@@ -10,7 +10,7 @@ import (
 )
 
 type Table struct {
-	// Name is the fully qualified name of the table, e.g.: table0
+	// Name is the name of the table this config targets
 	Name string `yaml:"name"`
 	// MaxRows overrides general MaxRows
 	MaxRows int `yaml:"maxRows"`
