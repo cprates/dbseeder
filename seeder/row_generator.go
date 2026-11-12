@@ -3,6 +3,7 @@ package seeder
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -195,15 +196,7 @@ func (r *RowGenerator) procNotEq(expr ir.OpNotEqual) {
 			// if excluded from the domain, there's no steps to add
 			return
 		}
-		columns := r.columnsFetcher(leftCol.Schema(), leftCol.TableName())
-		if columns == nil {
-			panic(fmt.Errorf("somehow we do not have columns for table %s", leftCol.TableName()))
-		}
-		r.stepsConstants = append(r.stepsConstants, &StepNotEqualConstant{
-			columnMeta: columnByName(columns, leftCol.ColumnName()),
-			column:     expr.Left().(ir.OperandColumn),
-			operand:    expr.Right().(ir.Operand),
-		})
+		r.addNotEqualConstant(leftCol, expr.Right().(ir.Operand))
 
 		return
 	}
@@ -213,18 +206,32 @@ func (r *RowGenerator) procNotEq(expr ir.OpNotEqual) {
 			// if excluded from the domain, there's no steps to add
 			return
 		}
-		columns := r.columnsFetcher(rightCol.Schema(), rightCol.TableName())
-		if columns == nil {
-			panic(fmt.Errorf("somehow we do not have columns for table %s", rightCol.TableName()))
-		}
-		r.stepsConstants = append(r.stepsConstants, &StepNotEqualConstant{
-			columnMeta: columnByName(columns, rightCol.ColumnName()),
-			column:     expr.Right().(ir.OperandColumn),
-			operand:    expr.Left().(ir.Operand),
-		})
+		r.addNotEqualConstant(rightCol, expr.Left().(ir.Operand))
 
 		return
 	}
+}
+
+// addNotEqualConstant adds operand to the values col must be different from. All the values for the same column are
+// kept in a single step so that generating a value different from one of them doesn't produce a value equal to another,
+// e.g.: 'c1 NOT IN ('a', 'b')'.
+func (r *RowGenerator) addNotEqualConstant(col ir.OperandColumn, operand ir.Operand) {
+	for _, step := range r.stepsConstants {
+		if s, ok := step.(*StepNotEqualConstant); ok && s.column.FQTableName() == col.FQTableName() && s.column.ColumnName() == col.ColumnName() {
+			s.operands = append(s.operands, operand)
+			return
+		}
+	}
+
+	columns := r.columnsFetcher(col.Schema(), col.TableName())
+	if columns == nil {
+		panic(fmt.Errorf("somehow we do not have columns for table %s", col.TableName()))
+	}
+	r.stepsConstants = append(r.stepsConstants, &StepNotEqualConstant{
+		columnMeta: columnByName(columns, col.ColumnName()),
+		column:     col,
+		operands:   []ir.Operand{operand},
+	})
 }
 
 // procRange handles the comparisons '>', '>=', '<' and '<=' between a column and a constant by narrowing the domain
@@ -339,18 +346,31 @@ func (r *RowGenerator) procIn(expr ir.OpIn) {
 	})
 }
 
+// procNotIn handles 'c1 NOT IN (...)' which is the same as 'c1 <> v1 AND c1 <> v2 AND ...'.
+func (r *RowGenerator) procNotIn(expr ir.OpIn) {
+	column := expr.Left().(ir.OperandColumn)
+	for _, operand := range expr.Right().([]ir.Operand) {
+		if !r.excludeFromDomain(column, operand) {
+			r.addNotEqualConstant(column, operand)
+		}
+	}
+}
+
 // procNot invert/negate the following Operations:
+// - OpAnd -> OpOr of the negated operands and vice versa
 // - OpEqual -> OpNotEqual
 // - OpNotEqual -> OpEqual
 // - OpGT -> OpLE, OpGE -> OpLT and vice versa
-// - OpIn -> ?
+// - OpIn -> NOT IN
 func (r *RowGenerator) procNot(expr any) {
 	switch exprT := expr.(type) {
 	case ir.OpAnd:
+		// NOT (a AND b) = NOT a OR NOT b
+		r.procAndNot(exprT)
+	case ir.OpOr:
+		// NOT (a OR b) = NOT a AND NOT b, e.g.: 'c1 NOT IN (1, 2)' is parsed as 'NOT (c1 = 1 OR c1 = 2)'
 		r.procNot(exprT.Left())
 		r.procNot(exprT.Right())
-	case ir.OpOr:
-		r.procOrNot(exprT)
 	case ir.OpEqual:
 		r.procNotEq(exprT.Negate())
 	case ir.OpNotEqual:
@@ -359,9 +379,7 @@ func (r *RowGenerator) procNot(expr any) {
 		// TODO
 		panic("not operator not implemented")
 	case ir.OpIn:
-		// r.procIn(exprT)
-		// TODO
-		panic("'NOT IN' not implemented yet")
+		r.procNotIn(exprT)
 	case ir.OpGT:
 		r.procRange(exprT.Negate())
 	case ir.OpGE:
@@ -376,11 +394,11 @@ func (r *RowGenerator) procNot(expr any) {
 	}
 }
 
-var procOrNotRnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+var procAndNotRnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func (r *RowGenerator) procOrNot(expr ir.OpOr) {
+func (r *RowGenerator) procAndNot(expr ir.OpAnd) {
 	// false for Left, true for Right
-	if procOrNotRnd.Intn(2) == 0 {
+	if procAndNotRnd.Intn(2) == 0 {
 		r.procNot(expr.Left())
 	} else {
 		r.procNot(expr.Right())
@@ -523,11 +541,12 @@ func (s *StepEqualColumn) assignValsToCols(rows RowSet, leftRow, rightRow Row) {
 	}
 }
 
+// StepNotEqualConstant assigns a column a value different from all operands.
 type StepNotEqualConstant struct {
 	done       bool
 	columnMeta Column
 	column     ir.OperandColumn
-	operand    ir.Operand
+	operands   []ir.Operand
 }
 
 func (s *StepNotEqualConstant) Apply(rows RowSet, _ bool) {
@@ -537,20 +556,25 @@ func (s *StepNotEqualConstant) Apply(rows RowSet, _ bool) {
 	s.done = true
 
 	// if it's a constant it has to be a string because for now it comes as is from the query string
-	switch val := s.operand.Value(nil).(type) {
-	case string, nil:
-		row := rows.GetForTable(s.column.FQTableName())
-		for range 10 {
-			col := s.columnMeta.Populate(row)
-			if col.Cmp(col.Val(), val) != 0 {
-				return
-			}
+	vals := make([]any, 0, len(s.operands))
+	for _, operand := range s.operands {
+		switch val := operand.Value(nil).(type) {
+		case string, nil:
+			vals = append(vals, val)
+		default:
+			panic(fmt.Errorf("expected string or nil but got %T", operand.Value(nil)))
 		}
-		// I want to flag if this fails to understand if this is enough or it needs a more sophisticated approach
-		panic(fmt.Errorf("unable to generate value different from %+v", val))
-	default:
-		panic(fmt.Errorf("expected string or nil but got %T", s.operand.Value(nil)))
 	}
+
+	row := rows.GetForTable(s.column.FQTableName())
+	for range 10 {
+		col := s.columnMeta.Populate(row)
+		if !slices.ContainsFunc(vals, func(val any) bool { return col.Cmp(col.Val(), val) == 0 }) {
+			return
+		}
+	}
+	// I want to flag if this fails to understand if this is enough or it needs a more sophisticated approach
+	panic(fmt.Errorf("unable to generate value different from %+v", vals))
 }
 
 type StepNotEqualColumn struct {
