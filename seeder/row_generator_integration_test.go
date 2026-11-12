@@ -789,6 +789,16 @@ func TestGenValuesNotIn(t *testing.T) {
 				require.Contains(t, []int32{-2, -1, 0, 10, 11, 12}, row["c1"].Val())
 			},
 		},
+		{
+			description: "bolas pah",
+			table:       "gennotintable7",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable7;
+						CREATE TABLE gennotintable7 (c1 text, c2 text);`,
+			sqlFilter: `select * from gennotintable7 where c1 IN ('a', 'b', 'c', 'd') AND c1 NOT IN ('a', 'b') and c1 <> 'c';`,
+			run: func(t *testing.T, row Row) {
+				require.Contains(t, "d", row["c1"].Val())
+			},
+		},
 	}
 
 	for _, test := range testsSet {
