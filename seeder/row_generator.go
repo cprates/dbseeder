@@ -346,7 +346,7 @@ func (r *RowGenerator) procIn(expr ir.OpIn) {
 	})
 }
 
-// procNotIn handles 'c1 NOT IN (...)' which is the same as 'c1 <> v1 AND c1 <> v2 AND ...'.
+// 'c1 NOT IN (...)' == 'c1 <> v1 AND c1 <> v2 AND ...'
 func (r *RowGenerator) procNotIn(expr ir.OpIn) {
 	column := expr.Left().(ir.OperandColumn)
 	for _, operand := range expr.Right().([]ir.Operand) {
@@ -357,7 +357,7 @@ func (r *RowGenerator) procNotIn(expr ir.OpIn) {
 }
 
 // procNot invert/negate the following Operations:
-// - OpAnd -> OpOr of the negated operands and vice versa
+// - OpAnd -> rand select one of the operands and negates
 // - OpEqual -> OpNotEqual
 // - OpNotEqual -> OpEqual
 // - OpGT -> OpLE, OpGE -> OpLT and vice versa
@@ -365,10 +365,9 @@ func (r *RowGenerator) procNotIn(expr ir.OpIn) {
 func (r *RowGenerator) procNot(expr any) {
 	switch exprT := expr.(type) {
 	case ir.OpAnd:
-		// NOT (a AND b) = NOT a OR NOT b
 		r.procAndNot(exprT)
 	case ir.OpOr:
-		// NOT (a OR b) = NOT a AND NOT b, e.g.: 'c1 NOT IN (1, 2)' is parsed as 'NOT (c1 = 1 OR c1 = 2)'
+		// !(a OR b) = !a AND !b
 		r.procNot(exprT.Left())
 		r.procNot(exprT.Right())
 	case ir.OpEqual:
@@ -396,13 +395,14 @@ func (r *RowGenerator) procNot(expr any) {
 
 var procAndNotRnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+// the logic here is 'NOT (a AND b) == NOT a OR NOT b'
 func (r *RowGenerator) procAndNot(expr ir.OpAnd) {
-	// false for Left, true for Right
 	if procAndNotRnd.Intn(2) == 0 {
 		r.procNot(expr.Left())
-	} else {
-		r.procNot(expr.Right())
+		return
 	}
+
+	r.procNot(expr.Right())
 }
 
 func (r *RowGenerator) procSteps() {

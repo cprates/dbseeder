@@ -695,6 +695,125 @@ func TestGenValuesRanges(t *testing.T) {
 	}
 }
 
+func TestGenValuesNotIn(t *testing.T) {
+	t.Parallel()
+
+	col := func(table, name string) ir.OperandColumn {
+		return ir.NewOperandColumn(TestsSchema, table, name)
+	}
+	constants := func(vals ...string) []ir.Operand {
+		ops := make([]ir.Operand, len(vals))
+		for i, v := range vals {
+			ops[i] = ir.NewOperandConstant(v)
+		}
+		return ops
+	}
+
+	// unique table names per test as tests run in parallel
+	testsSet := []struct {
+		description string
+		table       string
+		dbSetup     string
+		// either sqlFilter or expr must be set. expr is used to test operators the parser does not generate
+		sqlFilter string
+		expr      ir.Expression
+		run       func(t *testing.T, row Row)
+	}{
+		{
+			description: "sql filter on column with domain",
+			table:       "gennotintable1",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable1;
+						CREATE TABLE gennotintable1 (c1 int4);`,
+			sqlFilter: `select * from gennotintable1 where c1 > 0 and c1 <= 4 and c1 NOT IN (1, 2, 3);`,
+			run: func(t *testing.T, row Row) {
+				require.Equal(t, int32(4), row["c1"].Val())
+			},
+		},
+		{
+			description: "sql filter on column without domain",
+			table:       "gennotintable2",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable2;
+						CREATE TABLE gennotintable2 (c1 text);`,
+			sqlFilter: `select * from gennotintable2 where c1 NOT IN ('a', 'b', 'c');`,
+			run: func(t *testing.T, row Row) {
+				require.NotContains(t, []string{"a", "b", "c"}, row["c1"].Val())
+			},
+		},
+		{
+			description: "sql filter with tuples",
+			table:       "gennotintable3",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable3;
+						CREATE TABLE gennotintable3 (c1 int4, c2 int4);`,
+			sqlFilter: `select * from gennotintable3 where
+								c1 >= 1 and c1 <= 3 and c2 >= 1 and c2 <= 3 and (c1, c2) NOT IN ((1, 2), (3, 1));`,
+			run: func(t *testing.T, row Row) {
+				c1 := row["c1"].Val().(int32)
+				c2 := row["c2"].Val().(int32)
+				require.NotEqual(t, [2]int32{1, 2}, [2]int32{c1, c2})
+				require.NotEqual(t, [2]int32{3, 1}, [2]int32{c1, c2})
+			},
+		},
+		{
+			description: "in operator on column with domain",
+			table:       "gennotintable4",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable4;
+						CREATE TABLE gennotintable4 (c1 int4);`,
+			expr: ir.And(
+				ir.And(
+					ir.GT(col("gennotintable4", "c1"), ir.NewOperandConstant("0")),
+					ir.LE(col("gennotintable4", "c1"), ir.NewOperandConstant("4")),
+				),
+				ir.Not(ir.In(col("gennotintable4", "c1"), constants("1", "2", "3"))),
+			),
+			run: func(t *testing.T, row Row) {
+				require.Equal(t, int32(4), row["c1"].Val())
+			},
+		},
+		{
+			description: "in operator on column without domain",
+			table:       "gennotintable5",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable5;
+						CREATE TABLE gennotintable5 (c1 text);`,
+			expr: ir.Not(ir.In(col("gennotintable5", "c1"), constants("a", "b", "c"))),
+			run: func(t *testing.T, row Row) {
+				require.NotContains(t, []string{"a", "b", "c"}, row["c1"].Val())
+			},
+		},
+		{
+			description: "negated and only requires one side to be false",
+			table:       "gennotintable6",
+			dbSetup: `DROP TABLE IF EXISTS gennotintable6;
+						CREATE TABLE gennotintable6 (c1 int4);`,
+			sqlFilter: `select * from gennotintable6 where c1 >= -2 and c1 <= 12 and NOT (c1 > 0 AND c1 < 10);`,
+			run: func(t *testing.T, row Row) {
+				require.Contains(t, []int32{-2, -1, 0, 10, 11, 12}, row["c1"].Val())
+			},
+		},
+	}
+
+	for _, test := range testsSet {
+		t.Run(test.description, func(t *testing.T) {
+			psql := setupPgTest(t, test.dbSetup)
+			_, err := psql.GetTable(t.Context(), TestsSchema, test.table)
+			require.NoError(t, err)
+
+			expr := test.expr
+			if expr == nil {
+				expr, err = postgres.Parse(t.Context(), psql.inspector.TableWithSchema, test.sqlFilter)
+				require.NoError(t, err)
+			}
+			vc := NewRowGenerator(logger.NewNullLogger(), expr, psql.getTableColumnsAdapter(t.Context()))
+			for range 200 {
+				rowSet := vc.Gen()
+				require.Len(t, rowSet, 1)
+				row := rowSet.GetForTable(TestsSchema + "." + test.table)
+				test.run(t, row)
+				require.True(t, expr.Eval(map[string]ir.Row{TestsSchema + "." + test.table: seederToParserRow(row)}))
+			}
+		})
+	}
+}
+
 func setupPgTest(t *testing.T, q string) *Postgres {
 	t.Helper()
 
